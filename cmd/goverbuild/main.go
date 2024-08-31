@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"github.com/I-Am-Dench/goverbuild/manifest"
-	"github.com/I-Am-Dench/goverbuild/pk"
+	"github.com/I-Am-Dench/goverbuild/archive/manifest"
+	"github.com/I-Am-Dench/goverbuild/archive/pk"
 )
 
 func pkShow(args []string) {

@@ -7,7 +7,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/I-Am-Dench/goverbuild/manifest"
+	"github.com/I-Am-Dench/goverbuild/archive/manifest"
 )
 
 var test1 = `[version]
