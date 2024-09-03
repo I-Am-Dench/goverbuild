@@ -218,6 +218,9 @@ func Read(r io.Reader) (*Pack, error) {
 	return pack, err
 }
 
+// Opens a file with the provided name and returns the resulting *Pack from Read. If Read returns any error, this function
+// closes the opened file before passing the error back to the caller. If no error is returned from Read, the file remains
+// opened and must be closed by the caller.
 func Open(path string) (*Pack, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
