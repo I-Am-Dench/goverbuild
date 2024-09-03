@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
+	"github.com/I-Am-Dench/goverbuild/archive/catalog"
 	"github.com/I-Am-Dench/goverbuild/archive/manifest"
 	"github.com/I-Am-Dench/goverbuild/archive/pack"
 )
@@ -138,6 +139,64 @@ func doPk(args []string) {
 	}
 }
 
+func pkiShow(args []string) {
+	flagset := flag.NewFlagSet("pki:show", flag.ExitOnError)
+	skip := flagset.Int("skip", 0, "Sets at which file index to start displaying.")
+	limit := flagset.Int("limit", -1, "Sets the maximum amount of files that should be displayed. If the limit is < 0, all files will be shown.")
+	flagset.Parse(args)
+
+	if flagset.NArg() < 1 {
+		log.Fatal("expected filename")
+	}
+
+	path := flagset.Args()[0]
+
+	catalog, err := catalog.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		log.Fatalf("file does not exist: %s", path)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	files := catalog.Files
+	if *skip < 0 {
+		log.Fatal("starting index must be >= 0")
+	}
+
+	if *skip >= len(files) {
+		log.Fatalf("index out of bound: accessing index %d with length %d", *skip, len(files))
+	}
+
+	endIndex := len(files)
+	if *limit >= 0 {
+		endIndex = *skip + *limit
+	}
+
+	tab := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tab, "crc_index\tcrc_lower\tcrc_upper\tpack_name\tis_compressed")
+
+	for i := *skip; i < endIndex; i++ {
+		file := files[i]
+		fmt.Fprintf(tab, "%d\t%d\t%d\t%s\t%t\n", file.Crc, file.CrcLower, file.CrcUpper, file.Name, file.IsCompressed)
+	}
+	tab.Flush()
+}
+
+func doPki(args []string) {
+	if len(args) < 1 {
+		log.Fatal("expected subcommand: 'show'")
+	}
+
+	switch args[0] {
+	case "show":
+		pkiShow(args[1:])
+	default:
+		log.Fatal("expected subcommand: 'show'")
+	}
+}
+
 func doManifest(args []string) {
 	if len(args) < 1 {
 		log.Fatal("expected filename")
@@ -169,15 +228,17 @@ func main() {
 	log.SetPrefix("goverbuild: ")
 
 	if len(os.Args) < 2 {
-		log.Fatal("expected subcommand: 'pk' or 'manifest'")
+		log.Fatal("expected subcommand: 'pk', 'pki', or 'manifest'")
 	}
 
 	switch os.Args[1] {
 	case "pk":
 		doPk(os.Args[2:])
+	case "pki":
+		doPki(os.Args[2:])
 	case "manifest":
 		doManifest(os.Args[2:])
 	default:
-		log.Fatal("expected subcommand: 'pk' or 'manifest'")
+		log.Fatal("expected subcommand: 'pk', 'pki', or 'manifest'")
 	}
 }
