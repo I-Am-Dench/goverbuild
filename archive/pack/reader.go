@@ -31,6 +31,10 @@ type Record struct {
 }
 
 func (record *Record) Section() io.Reader {
+	if record.IsCompressed {
+		panic(fmt.Errorf("pack: section: compression not implemented"))
+	}
+
 	return record.r
 }
 
