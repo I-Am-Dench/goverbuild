@@ -1,4 +1,4 @@
-package pki
+package catalog
 
 import "io"
 

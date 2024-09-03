@@ -11,7 +11,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/I-Am-Dench/goverbuild/archive/manifest"
-	"github.com/I-Am-Dench/goverbuild/archive/pk"
+	"github.com/I-Am-Dench/goverbuild/archive/pack"
 )
 
 func pkShow(args []string) {
@@ -26,7 +26,7 @@ func pkShow(args []string) {
 
 	path := flagset.Args()[0]
 
-	pack, err := pk.Open(path)
+	pack, err := pack.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", path)
 	}
@@ -73,7 +73,7 @@ func pkDump(args []string) {
 
 	path := flagset.Args()[0]
 
-	pack, err := pk.Open(path)
+	pack, err := pack.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", path)
 	}

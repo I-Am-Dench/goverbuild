@@ -1,4 +1,4 @@
-package pk
+package pack
 
 import "encoding/binary"
 
