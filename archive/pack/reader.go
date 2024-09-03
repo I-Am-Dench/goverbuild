@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/I-Am-Dench/goverbuild/archive/internal"
 )
 
 type Record struct {
@@ -30,11 +32,6 @@ type Record struct {
 
 func (record *Record) Section() io.Reader {
 	return record.r
-}
-
-type ReadSeekerAt interface {
-	io.ReadSeeker
-	io.ReaderAt
 }
 
 type Pack struct {
@@ -140,7 +137,7 @@ func parseHeader(r io.ReadSeeker) (uint32, error) {
 	return numRecordsPointer, nil
 }
 
-func readRecords(r ReadSeekerAt, size uint32) ([]*Record, error) {
+func readRecords(r internal.ReadSeekerAt, size uint32) ([]*Record, error) {
 	errs := []error{}
 	records := make([]*Record, 0, size)
 
@@ -183,7 +180,7 @@ func readRecords(r ReadSeekerAt, size uint32) ([]*Record, error) {
 // should ONLY be used for diagnostic purposes, and it is encouraged to always discard a *Pack if ANY errors are returned even if there may still
 // be records available.
 func Read(r io.Reader) (*Pack, error) {
-	readSeeker, ok := r.(ReadSeekerAt)
+	readSeeker, ok := r.(internal.ReadSeekerAt)
 	if !ok {
 		data, err := io.ReadAll(r)
 		if err != nil {
