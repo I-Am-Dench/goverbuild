@@ -122,20 +122,20 @@ func readRecord(r io.ReadSeeker) (*Record, error) {
 func parseHeader(r io.ReadSeeker) (uint32, error) {
 	sig := [7]byte{}
 	if _, err := r.Read(sig[:]); err != nil {
-		return 0, fmt.Errorf("pk: parseHeader: signature: %w", err)
+		return 0, fmt.Errorf("pack: parseHeader: signature: %w", err)
 	}
 
 	if !bytes.Equal(sig[:], Signature) {
-		return 0, fmt.Errorf("pk: parseHeader: invalid signature")
+		return 0, fmt.Errorf("pack: parseHeader: invalid signature")
 	}
 
 	if _, err := r.Seek(-8, io.SeekEnd); err != nil {
-		return 0, fmt.Errorf("pk: parseHeader: numRecordsPointer: %w", err)
+		return 0, fmt.Errorf("pack: parseHeader: numRecordsPointer: %w", err)
 	}
 
 	var numRecordsPointer uint32
 	if err := binary.Read(r, order, &numRecordsPointer); err != nil {
-		return 0, fmt.Errorf("pk: parseHeader: numRecordsPointer: %w", err)
+		return 0, fmt.Errorf("pack: parseHeader: numRecordsPointer: %w", err)
 	}
 
 	return numRecordsPointer, nil
@@ -155,7 +155,7 @@ func readRecords(r internal.ReadSeekerAt, size uint32) ([]*Record, error) {
 	}
 
 	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		return nil, fmt.Errorf("pk: readRecords: %w", err)
+		return nil, fmt.Errorf("pack: readRecords: %w", err)
 	}
 
 	for _, record := range records {
@@ -188,7 +188,7 @@ func Read(r io.Reader) (*Pack, error) {
 	if !ok {
 		data, err := io.ReadAll(r)
 		if err != nil {
-			return nil, fmt.Errorf("pk: %w", err)
+			return nil, fmt.Errorf("pack: %w", err)
 		}
 
 		readSeeker = bytes.NewReader(data)
@@ -200,12 +200,12 @@ func Read(r io.Reader) (*Pack, error) {
 	}
 
 	if _, err := readSeeker.Seek(int64(numRecordsPointer), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("pk: numRecords: %w", err)
+		return nil, fmt.Errorf("pack: numRecords: %w", err)
 	}
 
 	var numRecords uint32
 	if err := binary.Read(readSeeker, order, &numRecords); err != nil {
-		return nil, fmt.Errorf("pk: numRecords: %w", err)
+		return nil, fmt.Errorf("pack: numRecords: %w", err)
 	}
 
 	pack := &Pack{}
@@ -225,7 +225,7 @@ func Read(r io.Reader) (*Pack, error) {
 func Open(path string) (*Pack, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
 	if err != nil {
-		return nil, fmt.Errorf("pk: open reader: %w", err)
+		return nil, fmt.Errorf("pack: open reader: %w", err)
 	}
 
 	file.Seek(0, io.SeekStart)

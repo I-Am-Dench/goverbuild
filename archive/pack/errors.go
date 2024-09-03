@@ -11,7 +11,7 @@ type RecordError struct {
 }
 
 func (err *RecordError) Error() string {
-	return fmt.Sprintf("pk: record: %s: %s", err.Field, err.Err.Error())
+	return fmt.Sprintf("pack: record: %s: %s", err.Field, err.Err.Error())
 }
 
 func (err *RecordError) Unwrap() error {
