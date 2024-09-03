@@ -15,8 +15,8 @@ import (
 	"github.com/I-Am-Dench/goverbuild/archive/pack"
 )
 
-func pkShow(args []string) {
-	flagset := flag.NewFlagSet("pk:show", flag.ExitOnError)
+func packShow(args []string) {
+	flagset := flag.NewFlagSet("pack:show", flag.ExitOnError)
 	skip := flagset.Int("skip", 0, "Sets at which record index to start displaying.")
 	limit := flagset.Int("limit", -1, "Sets the maximum amount of records that should be displayed. If the limit is < 0, all records will be shown.")
 	flagset.Parse(args)
@@ -61,9 +61,9 @@ func pkShow(args []string) {
 	tab.Flush()
 }
 
-func pkDump(args []string) {
-	flagset := flag.NewFlagSet("pk:dump", flag.ExitOnError)
-	dir := flagset.String("dir", ".", "Sets the output directory for pk record dumps. The directory will be created if it does not already exist.")
+func packDump(args []string) {
+	flagset := flag.NewFlagSet("pack:dump", flag.ExitOnError)
+	dir := flagset.String("dir", ".", "Sets the output directory for pack record dumps. The directory will be created if it does not already exist.")
 	skip := flagset.Int("skip", 0, "Sets which record index to start dumping from.")
 	limit := flagset.Int("limit", -1, "Sets the maximum amount of records that should be dumped. If the limit is < 0, all records will be dumped.")
 	flagset.Parse(args)
@@ -123,24 +123,24 @@ func pkDump(args []string) {
 	}
 }
 
-func doPk(args []string) {
+func doPack(args []string) {
 	if len(args) < 1 {
 		log.Fatal("expected subcommand: 'show', 'dump', or 'extract'")
 	}
 
 	switch args[0] {
 	case "show":
-		pkShow(args[1:])
+		packShow(args[1:])
 	case "dump":
-		pkDump(args[1:])
+		packDump(args[1:])
 	case "extract":
 	default:
 		log.Fatal("expected subcommand: 'show', 'dump', or 'extract'")
 	}
 }
 
-func pkiShow(args []string) {
-	flagset := flag.NewFlagSet("pki:show", flag.ExitOnError)
+func catalogShow(args []string) {
+	flagset := flag.NewFlagSet("catalog:show", flag.ExitOnError)
 	skip := flagset.Int("skip", 0, "Sets at which file index to start displaying.")
 	limit := flagset.Int("limit", -1, "Sets the maximum amount of files that should be displayed. If the limit is < 0, all files will be shown.")
 	flagset.Parse(args)
@@ -184,14 +184,14 @@ func pkiShow(args []string) {
 	tab.Flush()
 }
 
-func doPki(args []string) {
+func doCatalog(args []string) {
 	if len(args) < 1 {
 		log.Fatal("expected subcommand: 'show'")
 	}
 
 	switch args[0] {
 	case "show":
-		pkiShow(args[1:])
+		catalogShow(args[1:])
 	default:
 		log.Fatal("expected subcommand: 'show'")
 	}
@@ -228,17 +228,17 @@ func main() {
 	log.SetPrefix("goverbuild: ")
 
 	if len(os.Args) < 2 {
-		log.Fatal("expected subcommand: 'pk', 'pki', or 'manifest'")
+		log.Fatal("expected subcommand: 'pack', 'catalog', or 'manifest'")
 	}
 
 	switch os.Args[1] {
-	case "pk":
-		doPk(os.Args[2:])
-	case "pki":
-		doPki(os.Args[2:])
+	case "pack":
+		doPack(os.Args[2:])
+	case "catalog":
+		doCatalog(os.Args[2:])
 	case "manifest":
 		doManifest(os.Args[2:])
 	default:
-		log.Fatal("expected subcommand: 'pk', 'pki', or 'manifest'")
+		log.Fatal("expected subcommand: 'pack', 'catalog', or 'manifest'")
 	}
 }
