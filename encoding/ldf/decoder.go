@@ -111,11 +111,17 @@ func (decoder *TextDecoder) Token() (Token, error) {
 	return decoder.token, decoder.err
 }
 
-func (decoder *TextDecoder) setStructField(field reflect.Value, token Token) error {
+func (decoder *TextDecoder) setStructField(field reflect.Value, token Token) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("setStructField: %v", r)
+		}
+	}()
+
 	switch token.Type.Kind() {
 	case reflect.String:
 		field.SetString(strings.TrimRight(token.RawValue, "\r"))
-	case reflect.Int, reflect.Int32:
+	case reflect.Int32:
 		i, err := strconv.ParseInt(token.TrimmedValue(), 10, 32)
 		if err != nil {
 			return err
@@ -136,7 +142,7 @@ func (decoder *TextDecoder) setStructField(field reflect.Value, token Token) err
 		}
 
 		field.SetFloat(f)
-	case reflect.Uint, reflect.Uint32:
+	case reflect.Uint32:
 		i, err := strconv.ParseUint(token.TrimmedValue(), 10, 32)
 		if err != nil {
 			return err

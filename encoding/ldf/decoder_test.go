@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"unsafe"
 
 	"github.com/I-Am-Dench/goverbuild/encoding/ldf"
 )
@@ -111,5 +112,69 @@ func TestUnmarshal(t *testing.T) {
 
 	if err := testUnmarshalBasic(expected, formatCarriageReturns); err != nil {
 		t.Errorf("test unmarshal carriage returns: %v", err)
+	}
+}
+
+type Integers struct {
+	Int  int  `ldf:"INT"`
+	Uint uint `ldf:"UINT"`
+}
+
+func testUnmarshalIntegers(expected Integers, format string) error {
+	data := []byte(fmt.Sprintf(format, expected.Int, expected.Uint))
+
+	actual := Integers{}
+	if err := ldf.Unmarshal(data, &actual); err != nil {
+		return err
+	}
+
+	if actual.Int != expected.Int {
+		return fmt.Errorf("expected int %d but got %d", expected.Int, actual.Int)
+	}
+
+	if actual.Uint != expected.Uint {
+		return fmt.Errorf("expected uint %d but got %d", expected.Uint, actual.Uint)
+	}
+
+	return nil
+}
+
+func TestUnmarshalIntegers(t *testing.T) {
+	expected := Integers{
+		Int:  -180015668,
+		Uint: 2401893510,
+	}
+
+	if err := testUnmarshalIntegers(expected, "INT=1:%d,UINT=5:%d"); err != nil {
+		t.Errorf("test unmarshal integers: 32 bits: %v", err)
+	}
+
+	if err := testUnmarshalIntegers(expected, "INT=9:%d,UINT=8:%d"); err != nil {
+		t.Errorf("test unmarshal integers: 64 bits: %v", err)
+	}
+
+	data := "INT=9:-9223372036854775808,UINT=8:18446744073709551615"
+
+	largeInts := Integers{}
+	if err := ldf.Unmarshal([]byte(data), &largeInts); err != nil {
+		t.Errorf("test unmarshal integers: 64 bit value: %v", err)
+	}
+
+	if unsafe.Sizeof(int(0)) == 8 {
+		if largeInts.Int != -9223372036854775808 {
+			t.Errorf("test unmarshal integers: int{64}: expected -9223372036854775808 but got %d", largeInts.Int)
+		}
+
+		if largeInts.Uint != 18446744073709551615 {
+			t.Errorf("test unmarshal integers: uint{64}: expected 18446744073709551615 but got %d", largeInts.Uint)
+		}
+	} else if unsafe.Sizeof(int(0)) == 4 {
+		if largeInts.Int != 0 {
+			t.Errorf("test unmarshal integers: int{32}: expected 0 but got %d", largeInts.Int)
+		}
+
+		if largeInts.Uint != 4294967295 {
+			t.Errorf("test unmarshal integers: uint{32}: expected 4294967295 but got %d", largeInts.Uint)
+		}
 	}
 }
