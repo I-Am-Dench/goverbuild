@@ -9,40 +9,6 @@ import (
 	"github.com/I-Am-Dench/goverbuild/encoding/ldf"
 )
 
-var (
-	formatCommasOnly = "STRING=0:%s,INT32=1:%d,FLOAT=3:%f,DOUBLE=4:%v,UINT32=5:%d,BOOLEAN=7:%t"
-
-	formatNewlines = `
-STRING=0:%s
-INT32=1:%d
-FLOAT=3:%f
-DOUBLE=4:%v
-UINT32=5:%d
-BOOLEAN=7:%t`
-
-	formatWhitespace = `
-
-	STRING=0:%s
-
-INT32=1:%d
-FLOAT=3:%f
-
-DOUBLE=4:%v
-UINT32=5:%d
-
-      BOOLEAN=7:%t
-	`
-
-	formatMixedCommasAndNewlines = `STRING=0:%s
-INT32=1:%d,
-FLOAT=3:%f
-DOUBLE=4:%v
-UINT32=5:%d,
-BOOLEAN=7:%t`
-
-	formatCarriageReturns = "STRING=0:%s\r\nINT32=1:%d\r\nFLOAT=3:%f\r\nDOUBLE=4:%v\r\nUINT32=5:%d\r\nBOOLEAN=7:%t"
-)
-
 func testUnmarshalBasic(expected Basic, format string) error {
 	data := []byte(fmt.Sprintf(format, expected.String, expected.Int32, expected.Float, expected.Double, expected.Uint32, expected.Boolean))
 

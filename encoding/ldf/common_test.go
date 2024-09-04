@@ -2,6 +2,47 @@ package ldf_test
 
 import "fmt"
 
+const (
+	formatCommasOnly = "STRING=0:%s,INT32=1:%d,FLOAT=3:%v,DOUBLE=4:%v,UINT32=5:%d,BOOLEAN=7:%t"
+
+	formatNewlines = `
+STRING=0:%s
+INT32=1:%d
+FLOAT=3:%f
+DOUBLE=4:%v
+UINT32=5:%d
+BOOLEAN=7:%t`
+
+	formatWhitespace = `
+
+	STRING=0:%s
+
+INT32=1:%d
+FLOAT=3:%f
+
+DOUBLE=4:%v
+UINT32=5:%d
+
+      BOOLEAN=7:%t
+	`
+
+	formatMixedCommasAndNewlines = `STRING=0:%s
+INT32=1:%d,
+FLOAT=3:%f
+DOUBLE=4:%v
+UINT32=5:%d,
+BOOLEAN=7:%t`
+
+	formatCarriageReturns = "STRING=0:%s\r\nINT32=1:%d\r\nFLOAT=3:%f\r\nDOUBLE=4:%v\r\nUINT32=5:%d\r\nBOOLEAN=7:%t"
+
+	formatNewlineCommas = `STRING=0:%s,
+INT32=1:%d,
+FLOAT=3:%v,
+DOUBLE=4:%v,
+UINT32=5:%d,
+BOOLEAN=7:%t`
+)
+
 type LdfBool bool
 
 func (b LdfBool) Format(f fmt.State, verb rune) {
@@ -24,4 +65,8 @@ type Basic struct {
 	Double  float64 `ldf:"DOUBLE"`
 	Uint32  uint32  `ldf:"UINT32"`
 	Boolean LdfBool `ldf:"BOOLEAN"`
+}
+
+func (basic Basic) Format(format string) string {
+	return fmt.Sprintf(format, basic.String, basic.Int32, basic.Float, basic.Double, basic.Uint32, basic.Boolean)
 }

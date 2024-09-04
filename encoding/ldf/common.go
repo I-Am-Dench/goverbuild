@@ -13,7 +13,7 @@ const (
 	Unsigned32
 	_
 	Bool
-	Usigned64
+	Unsigned64
 	Signed64
 	_
 	_
@@ -35,7 +35,7 @@ func (t ValueType) Kind() reflect.Kind {
 		return reflect.Uint32
 	case Bool:
 		return reflect.Bool
-	case Usigned64:
+	case Unsigned64:
 		return reflect.Uint64
 	case Signed64:
 		return reflect.Int64
