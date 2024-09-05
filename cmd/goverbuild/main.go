@@ -335,6 +335,53 @@ func doManifest(args []string) {
 	}
 }
 
+func doExtract(args []string) {
+	flagset := flag.NewFlagSet("extract", flag.ExitOnError)
+	verbose := flagset.Bool("v", false, "Verbose.")
+	ignoreErrors := flagset.Bool("ie", false, "Ignores errors. Otherwise, the extractor logs an error and exits with an error code.")
+	manifestPath := flagset.String("manifest", "trunk.txt", "(.txt) The primary manifest file.")
+	catalogPath := flagset.String("catalog", "primary.pki", "(.pki) The primary catalog file.")
+	rel := flagset.String("rel", "", "Used when searching for pack (.pk) files. Instead of using the full path (i.e. client\\res\\pack\\...), extract will instead use a path relative to the rel path. If rel is client\\res, extract will get packs from .\\pack")
+	client := flagset.String("output", ".", "The directory to extract the client in to.")
+	flagset.Parse(args)
+
+	catalog, err := catalog.Open(*catalogPath)
+	if errors.Is(err, os.ErrNotExist) {
+		log.Fatalf("catalog file does not exist: %s", *catalogPath)
+	}
+
+	if err != nil {
+		log.Fatalf("catalog: %v", err)
+	}
+
+	extractor := Extractor{
+		Verbose:      *verbose,
+		IgnoreErrors: *ignoreErrors,
+		Catalog:      catalog,
+		Rel:          *rel,
+		Client:       *client,
+	}
+
+	if flagset.NArg() >= 1 {
+		extractor.Extract(flagset.Args()[0])
+		return
+	}
+
+	manifest, err := manifest.Open(*manifestPath)
+	if errors.Is(err, os.ErrNotExist) {
+		log.Fatalf("manifest file does not exist: %s", *manifestPath)
+	}
+
+	if err != nil {
+		log.Fatalf("manifest: %v", err)
+	}
+
+	fmt.Printf("(%s) Extracting client resources...\n", manifest.Name)
+	for _, file := range manifest.Files {
+		extractor.Extract(file.Name())
+	}
+}
+
 func main() {
 	log.SetFlags(0)
 	log.SetPrefix("goverbuild: ")
@@ -350,6 +397,8 @@ func main() {
 		doCatalog(os.Args[2:])
 	case "manifest":
 		doManifest(os.Args[2:])
+	case "extract":
+		doExtract(os.Args[2:])
 	default:
 		log.Fatal("expected subcommand: 'pack', 'catalog', or 'manifest'")
 	}
