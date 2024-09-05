@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -47,12 +46,6 @@ type Manifest struct {
 
 func parseSections(r io.Reader) Sections {
 	sections := Sections{}
-
-	file, err := os.OpenFile("lines", os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		log.Panic(err)
-	}
-	defer file.Close()
 
 	lines := [][]byte{}
 	currentSection := ""
