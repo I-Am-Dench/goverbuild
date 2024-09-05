@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 
 	"github.com/I-Am-Dench/goverbuild/archive/internal"
 )
@@ -15,7 +16,7 @@ import (
 type Record struct {
 	r *io.SectionReader
 
-	CrcIndex int32
+	Crc      uint32
 	CrcLower int32
 	CrcUpper int32
 
@@ -48,6 +49,16 @@ func (pack *Pack) Records() []*Record {
 	return pack.records
 }
 
+func (pack *Pack) Search(path string) (*Record, bool) {
+	crc := internal.GetCrc(path)
+
+	i := sort.Search(len(pack.records), func(i int) bool { return pack.records[i].Crc >= crc })
+	if i < len(pack.records) && pack.records[i].Crc == crc {
+		return pack.records[i], true
+	}
+	return nil, false
+}
+
 func (pack *Pack) Close() error {
 	if pack.closer != nil {
 		return pack.closer.Close()
@@ -73,7 +84,7 @@ func readHash(r io.ReadSeeker) ([]byte, error) {
 func readRecord(r io.ReadSeeker) (*Record, error) {
 	record := &Record{}
 
-	if err := binary.Read(r, order, &record.CrcIndex); err != nil {
+	if err := binary.Read(r, order, &record.Crc); err != nil {
 		return nil, &RecordError{err, "index"}
 	}
 

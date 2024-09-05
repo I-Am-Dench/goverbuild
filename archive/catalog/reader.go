@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 
 	"github.com/I-Am-Dench/goverbuild/archive/internal"
 )
@@ -34,6 +35,16 @@ type Catalog struct {
 	Version int32
 
 	Files []*File
+}
+
+func (catalog *Catalog) Search(path string) (*File, bool) {
+	crc := internal.GetCrc(path)
+
+	i := sort.Search(len(catalog.Files), func(i int) bool { return catalog.Files[i].Crc >= crc })
+	if i < len(catalog.Files) && catalog.Files[i].Crc == crc {
+		return catalog.Files[i], true
+	}
+	return nil, false
 }
 
 func readFile(r internal.ReadSeekerAt, packnames []string) (*File, error) {

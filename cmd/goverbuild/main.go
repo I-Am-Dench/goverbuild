@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/I-Am-Dench/goverbuild/archive/catalog"
@@ -56,7 +57,7 @@ func packShow(args []string) {
 
 	for i := 0; i < endIndex; i++ {
 		record := records[i]
-		fmt.Fprintf(tab, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%t\n", record.CrcIndex, record.CrcLower, record.CrcUpper, record.OriginalSize, record.OriginalHash, record.CompressedSize, record.CompressedHash, record.IsCompressed)
+		fmt.Fprintf(tab, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%t\n", record.Crc, record.CrcLower, record.CrcUpper, record.OriginalSize, record.OriginalHash, record.CompressedSize, record.CompressedHash, record.IsCompressed)
 	}
 	tab.Flush()
 }
@@ -123,6 +124,60 @@ func packDump(args []string) {
 	}
 }
 
+func packSearchAndShow(pack *pack.Pack, path string) {
+	record, ok := pack.Search(path)
+	if !ok {
+		fmt.Printf("failed to find \"%s\"\n", path)
+		return
+	}
+
+	fmt.Println()
+	tab := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tab, "crc_index\tcrc_lower\tcrc_upper\toriginal_size\toriginal_hash\tcompressed_size\tcompressed_hash\tis_compressed")
+	fmt.Fprintf(tab, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%t\n", record.Crc, record.CrcLower, record.CrcUpper, record.OriginalSize, record.OriginalHash, record.CompressedSize, record.CompressedHash, record.IsCompressed)
+	tab.Flush()
+	fmt.Println()
+}
+
+func packSearch(args []string) {
+	flagset := flag.NewFlagSet("pack:search", flag.ExitOnError)
+	find := flagset.String("find", "", "Specifies the path to search for in the pack. Including this option causes the program to exit after receiving a result.")
+	flagset.Parse(args)
+
+	if flagset.NArg() < 1 {
+		log.Fatal("expected filepath")
+	}
+
+	packPath := flagset.Args()[0]
+
+	pack, err := pack.Open(packPath)
+	if errors.Is(err, os.ErrNotExist) {
+		log.Fatalf("file does not exist: %s", packPath)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Loaded %d records from \"%s\"\n", len(pack.Records()), packPath)
+	if len(*find) > 0 {
+		packSearchAndShow(pack, *find)
+		os.Exit(0)
+	}
+
+	for {
+		var find string
+		fmt.Print("Search (leave blank to exit): ")
+		fmt.Scanln(&find)
+
+		if len(strings.TrimSpace(find)) == 0 {
+			return
+		}
+
+		packSearchAndShow(pack, strings.TrimSpace(find))
+	}
+}
+
 func doPack(args []string) {
 	if len(args) < 1 {
 		log.Fatal("expected subcommand: 'show', 'dump', or 'extract'")
@@ -133,6 +188,8 @@ func doPack(args []string) {
 		packShow(args[1:])
 	case "dump":
 		packDump(args[1:])
+	case "search":
+		packSearch(args[1:])
 	case "extract":
 	default:
 		log.Fatal("expected subcommand: 'show', 'dump', or 'extract'")
@@ -184,16 +241,72 @@ func catalogShow(args []string) {
 	tab.Flush()
 }
 
+func catalogSearchAndShow(catalog *catalog.Catalog, path string) {
+	file, ok := catalog.Search(path)
+	if !ok {
+		fmt.Printf("failed to find \"%s\"\n", path)
+		return
+	}
+
+	fmt.Println()
+	tab := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tab, "crc_index\tcrc_lower\tcrc_upper\tpack_name\tis_compressed")
+	fmt.Fprintf(tab, "%d\t%d\t%d\t%s\t%t\n", file.Crc, file.CrcLower, file.CrcUpper, file.Name, file.IsCompressed)
+	tab.Flush()
+	fmt.Println()
+}
+
+func catalogSearch(args []string) {
+	flagset := flag.NewFlagSet("catalog:search", flag.ExitOnError)
+	find := flagset.String("find", "", "Specifies the path to search for in the catalog. Including this option causes the program to exit after receiving a result.")
+	flagset.Parse(args)
+
+	if flagset.NArg() < 1 {
+		log.Fatal("expected filepath")
+	}
+
+	catalogPath := flagset.Args()[0]
+
+	catalog, err := catalog.Open(catalogPath)
+	if errors.Is(err, os.ErrNotExist) {
+		log.Fatalf("file does not exist: %s", catalogPath)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Loaded %d entries from \"%s\"\n", len(catalog.Files), catalogPath)
+	if len(*find) > 0 {
+		catalogSearchAndShow(catalog, *find)
+		os.Exit(0)
+	}
+
+	for {
+		var find string
+		fmt.Print("Search (leave blank to exit): ")
+		fmt.Scanln(&find)
+
+		if len(strings.TrimSpace(find)) == 0 {
+			return
+		}
+
+		catalogSearchAndShow(catalog, strings.TrimSpace(find))
+	}
+}
+
 func doCatalog(args []string) {
 	if len(args) < 1 {
-		log.Fatal("expected subcommand: 'show'")
+		log.Fatal("expected subcommand: 'show' or 'search'")
 	}
 
 	switch args[0] {
 	case "show":
 		catalogShow(args[1:])
+	case "search":
+		catalogSearch(args[1:])
 	default:
-		log.Fatal("expected subcommand: 'show'")
+		log.Fatal("expected subcommand: 'show' or 'search'")
 	}
 }
 
