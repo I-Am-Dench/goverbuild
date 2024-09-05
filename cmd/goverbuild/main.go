@@ -180,7 +180,7 @@ func packSearch(args []string) {
 
 func doPack(args []string) {
 	if len(args) < 1 {
-		log.Fatal("expected subcommand: 'show', 'dump', or 'extract'")
+		log.Fatal("expected subcommand: 'show', 'dump', or 'search'")
 	}
 
 	switch args[0] {
@@ -190,9 +190,8 @@ func doPack(args []string) {
 		packDump(args[1:])
 	case "search":
 		packSearch(args[1:])
-	case "extract":
 	default:
-		log.Fatal("expected subcommand: 'show', 'dump', or 'extract'")
+		log.Fatal("expected subcommand: 'show', 'dump', or 'search'")
 	}
 }
 
