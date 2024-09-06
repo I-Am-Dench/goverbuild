@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/I-Am-Dench/goverbuild/archive/internal"
+	"github.com/I-Am-Dench/goverbuild/compress/sid0"
 )
 
 type Record struct {
@@ -31,12 +32,16 @@ type Record struct {
 	IsCompressed bool
 }
 
-func (record *Record) Section() io.Reader {
+func (record *Record) Section() (io.Reader, error) {
 	if record.IsCompressed {
-		panic(fmt.Errorf("pack: section: compression not implemented"))
+		reader, err := sid0.NewDataReader(record.r, record.CompressedSize)
+		if err != nil {
+			return nil, fmt.Errorf("pack: record: section: %w", err)
+		}
+		return reader, nil
 	}
 
-	return record.r
+	return record.r, nil
 }
 
 type Pack struct {
