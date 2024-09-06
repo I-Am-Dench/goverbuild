@@ -15,7 +15,7 @@ var (
 )
 
 func GetCrc(s string) uint32 {
-	cleaned := strings.ReplaceAll(strings.ToLower(s), "/", "\\")
+	cleaned := strings.TrimSpace(strings.ReplaceAll(strings.ToLower(s), "/", "\\"))
 	data := append([]byte(cleaned), []byte{0x00, 0x00, 0x00, 0x00}...)
 
 	hash := crc.NewHashWithTable(Crc)
