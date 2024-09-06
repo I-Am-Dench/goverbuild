@@ -112,7 +112,20 @@ func (extractor *Extractor) Extract(path string) {
 		return
 	}
 
-	if _, err := io.Copy(out, record.Section()); err != nil {
+	section, err := record.Section()
+	if err != nil {
+		if extractor.Verbose {
+			log.Printf("extractor: %s: %v", path, err)
+		}
+
+		if !extractor.IgnoreErrors {
+			os.Exit(0)
+		}
+
+		return
+	}
+
+	if _, err := io.Copy(out, section); err != nil {
 		if extractor.Verbose {
 			log.Printf("extractor: %s: %v", path, err)
 		}

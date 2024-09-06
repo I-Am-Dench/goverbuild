@@ -113,8 +113,14 @@ func packDump(args []string) {
 			continue
 		}
 
-		record := records[i]
-		if n, err := io.Copy(file, record.Section()); err != nil {
+		section, err := records[i].Section()
+		if err != nil {
+			log.Printf("dump: %v", err)
+			file.Close()
+			continue
+		}
+
+		if n, err := io.Copy(file, section); err != nil {
 			log.Printf("dump: %v", err)
 		} else {
 			fmt.Printf("Dumped %s (%d bytes)\n", dumppath, n)
@@ -139,9 +145,41 @@ func packSearchAndShow(pack *pack.Pack, path string) {
 	fmt.Println()
 }
 
+func packExtract(pack *pack.Pack, path, extract string) {
+	record, ok := pack.Search(path)
+	if !ok {
+		fmt.Printf("failed to find \"%s\"\n", path)
+		return
+	}
+
+	output := filepath.Base(path)
+	if extract != "~" {
+		output = extract
+	}
+
+	if err := os.MkdirAll(filepath.Dir(output), 0755); err != nil {
+		log.Fatal(err)
+	}
+
+	file, err := os.OpenFile(output, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	section, err := record.Section()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if _, err := io.Copy(file, section); err != nil {
+		log.Fatal(err)
+	}
+}
+
 func packSearch(args []string) {
 	flagset := flag.NewFlagSet("pack:search", flag.ExitOnError)
 	find := flagset.String("find", "", "Specifies the path to search for in the pack. Including this option causes the program to exit after receiving a result.")
+	extract := flagset.String("extract", "", "The filename to extract the contents of the record, specified by the find flag, to.")
 	flagset.Parse(args)
 
 	if flagset.NArg() < 1 {
@@ -161,7 +199,11 @@ func packSearch(args []string) {
 
 	fmt.Printf("Loaded %d records from \"%s\"\n", len(pack.Records()), packPath)
 	if len(*find) > 0 {
-		packSearchAndShow(pack, *find)
+		if len(*extract) > 0 {
+			packExtract(pack, *find, *extract)
+		} else {
+			packSearchAndShow(pack, *find)
+		}
 		os.Exit(0)
 	}
 
