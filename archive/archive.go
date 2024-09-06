@@ -1,16 +1,10 @@
-package internal
+package archive
 
 import (
-	"io"
 	"strings"
 
 	"github.com/snksoft/crc"
 )
-
-type ReadSeekerAt interface {
-	io.ReadSeeker
-	io.ReaderAt
-}
 
 var (
 	Crc = crc.NewTable(&crc.Parameters{

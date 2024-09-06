@@ -10,8 +10,9 @@ import (
 	"os"
 	"sort"
 
-	"github.com/I-Am-Dench/goverbuild/archive/internal"
+	"github.com/I-Am-Dench/goverbuild/archive"
 	"github.com/I-Am-Dench/goverbuild/compress/sid0"
+	"github.com/I-Am-Dench/goverbuild/internal"
 )
 
 type Record struct {
@@ -55,7 +56,7 @@ func (pack *Pack) Records() []*Record {
 }
 
 func (pack *Pack) Search(path string) (*Record, bool) {
-	crc := internal.GetCrc(path)
+	crc := archive.GetCrc(path)
 
 	i := sort.Search(len(pack.records), func(i int) bool { return pack.records[i].Crc >= crc })
 	if i < len(pack.records) && pack.records[i].Crc == crc {
