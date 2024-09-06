@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -70,7 +71,7 @@ func (extractor *Extractor) Extract(path string) {
 			log.Printf("extractor: %s: %v", path, err)
 		}
 
-		if !extractor.IgnoreErrors {
+		if !extractor.IgnoreErrors && !errors.Is(err, os.ErrNotExist) {
 			os.Exit(1)
 		}
 
