@@ -18,7 +18,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/I-Am-Dench/goverbuild/archive/internal"
+	"github.com/I-Am-Dench/goverbuild/archive"
+	"github.com/I-Am-Dench/goverbuild/internal"
 )
 
 type File struct {
@@ -38,7 +39,7 @@ type Catalog struct {
 }
 
 func (catalog *Catalog) Search(path string) (*File, bool) {
-	crc := internal.GetCrc(path)
+	crc := archive.GetCrc(path)
 
 	i := sort.Search(len(catalog.Files), func(i int) bool { return catalog.Files[i].Crc >= crc })
 	if i < len(catalog.Files) && catalog.Files[i].Crc == crc {
