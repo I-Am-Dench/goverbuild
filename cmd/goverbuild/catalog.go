@@ -44,7 +44,6 @@ func catalogShow(args []string) {
 		log.Fatal(err)
 	}
 
-	// endIndex := VerifySkipLimit(*skip, *limit, catalog.Files)
 	tab := NewCatalogFileTable()
 	for _, file := range SkipLimitSlice(*skip, *limit, catalog.Files) {
 		tab.File(file)

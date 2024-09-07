@@ -2,10 +2,12 @@ package pack
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"sort"
@@ -33,16 +35,30 @@ type Record struct {
 	IsCompressed bool
 }
 
-func (record *Record) Section() (io.Reader, error) {
+func (record *Record) Section() (io.Reader, hash.Hash, error) {
+	reader := io.Reader(record.r)
 	if record.IsCompressed {
-		reader, err := sid0.NewDataReader(record.r, record.CompressedSize)
+		sd0, err := sid0.NewDataReader(reader, record.CompressedSize)
 		if err != nil {
-			return nil, fmt.Errorf("pack: record: section: %w", err)
+			return nil, nil, fmt.Errorf("pack: recrod: section: %w", err)
 		}
-		return reader, nil
+		reader = sd0
 	}
 
-	return record.r, nil
+	hash := md5.New()
+	reader = io.TeeReader(reader, hash)
+
+	return reader, hash, nil
+
+	// if record.IsCompressed {
+	// 	reader, err := sid0.NewDataReader(record.r, record.CompressedSize)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("pack: record: section: %w", err)
+	// 	}
+	// 	return reader, nil
+	// }
+
+	// return record.r, nil
 }
 
 type Pack struct {

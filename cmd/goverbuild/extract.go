@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,11 +17,12 @@ import (
 )
 
 type Extractor struct {
-	Verbose      bool
-	IgnoreErrors bool
-	Catalog      *catalog.Catalog
-	Rel          string
-	Client       string
+	Verbose          bool
+	IgnoreErrors     bool
+	Catalog          *catalog.Catalog
+	Rel              string
+	Client           string
+	RemoveMismatches bool
 
 	packs map[string]*pack.Pack
 }
@@ -99,8 +101,9 @@ func (extractor *Extractor) Extract(path string) {
 		extractor.logFatal("extractor: %s: %v", path, err)
 		return
 	}
+	defer out.Close()
 
-	section, err := record.Section()
+	section, hash, err := record.Section()
 	if err != nil {
 		extractor.logFatal("extractor: %s: %v", path, err)
 		return
@@ -109,6 +112,16 @@ func (extractor *Extractor) Extract(path string) {
 	if _, err := io.Copy(out, section); err != nil {
 		extractor.logFatal("extractor: %s: %v", path, err)
 		return
+	}
+
+	if h := hash.Sum(nil); !bytes.Equal(h, record.OriginalHash) {
+		if !extractor.RemoveMismatches {
+			extractor.logFatal("extractor: %s: hashes do not match: %x != %x", path, h, record.OriginalHash)
+		} else {
+			out.Close()
+			os.Remove(outputPath)
+			extractor.logFatal("extractor: %s: hashes do not match: %x != %x: removing %s", path, h, record.OriginalHash, outputPath)
+		}
 	}
 
 	extractor.log("extractor: success: extracted %s\n", path)
@@ -122,6 +135,7 @@ func doExtract(args []string) {
 	catalogPath := flagset.String("catalog", "versions\\primary.pki", "(.pki) The primary catalog file.")
 	rel := flagset.String("rel", "", "Used when searching for pack (.pk) files. Instead of using the full path (i.e. client\\res\\pack\\...), extract will instead use a path relative to the rel path. If rel is client\\res, extract will get packs from .\\pack")
 	client := flagset.String("output", ".", "The directory to extract the client in to.")
+	removeMismatches := flagset.Bool("removemismatches", false, "Remove files with mismatched md5 hashes.")
 	flagset.Parse(args)
 
 	catalog, err := catalog.Open(*catalogPath)
@@ -134,11 +148,12 @@ func doExtract(args []string) {
 	}
 
 	extractor := Extractor{
-		Verbose:      *verbose,
-		IgnoreErrors: *ignoreErrors,
-		Catalog:      catalog,
-		Rel:          *rel,
-		Client:       *client,
+		Verbose:          *verbose,
+		IgnoreErrors:     *ignoreErrors,
+		Catalog:          catalog,
+		Rel:              *rel,
+		Client:           *client,
+		RemoveMismatches: *removeMismatches,
 	}
 
 	if flagset.NArg() >= 1 {

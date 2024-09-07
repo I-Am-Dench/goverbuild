@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -87,7 +88,7 @@ func packDump(args []string) {
 			continue
 		}
 
-		section, err := record.Section()
+		section, hash, err := record.Section()
 		if err != nil {
 			log.Printf("dump: %v", err)
 			file.Close()
@@ -97,7 +98,7 @@ func packDump(args []string) {
 		if n, err := io.Copy(file, section); err != nil {
 			log.Printf("dump: %v", err)
 		} else {
-			fmt.Printf("Dumped %s (%d bytes)\n", dumppath, n)
+			fmt.Printf("Dumped %s (%d bytes); Calculated hash: %x\n", dumppath, n, hash.Sum(nil))
 		}
 
 		file.Close()
@@ -194,13 +195,17 @@ func packExtract(args []string) {
 	}
 	defer file.Close()
 
-	section, err := record.Section()
+	section, hash, err := record.Section()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if _, err := io.Copy(file, section); err != nil {
 		log.Fatal(err)
+	}
+
+	if h := hash.Sum(nil); !bytes.Equal(h, record.OriginalHash) {
+		log.Printf("warning: md5 hashes do not match: %x != %x", h, record.OriginalHash)
 	}
 
 	fmt.Printf("extracted \"%s\" to \"%s\"\n", findPath, outputPath)
