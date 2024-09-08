@@ -1,6 +1,9 @@
 package ldf
 
-import "reflect"
+import (
+	"fmt"
+	"unicode/utf16"
+)
 
 type ValueType int
 
@@ -21,25 +24,39 @@ const (
 	StringUtf8
 )
 
-func (t ValueType) Kind() reflect.Kind {
+func (t ValueType) String() string {
 	switch t {
-	case StringUtf16, StringUtf8:
-		return reflect.String
+	case StringUtf16:
+		return "StringUtf16"
 	case Signed32:
-		return reflect.Int32
+		return "Signed32"
 	case Float:
-		return reflect.Float32
+		return "Float"
 	case Double:
-		return reflect.Float64
+		return "Double"
 	case Unsigned32:
-		return reflect.Uint32
+		return "Unsigned32"
 	case Bool:
-		return reflect.Bool
+		return "Bool"
 	case Unsigned64:
-		return reflect.Uint64
+		return "Unsigned64"
 	case Signed64:
-		return reflect.Int64
+		return "Signed64"
+	case StringUtf8:
+		return "StringUtf8"
 	default:
-		return reflect.Invalid
+		return fmt.Sprintf("ValueType(%d)", t)
 	}
+}
+
+var ()
+
+type Utf16String []uint16
+
+func StringToUtf16(s string) Utf16String {
+	return utf16.Encode([]rune(s))
+}
+
+func (s Utf16String) String() string {
+	return string(utf16.Decode(s))
 }

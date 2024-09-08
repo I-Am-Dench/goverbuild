@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode/utf16"
 )
 
 func splitLineComma(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -92,7 +93,7 @@ func (decoder *TextDecoder) Next() bool {
 		rawToken = decoder.s.Text()
 	}
 
-	if len(rawToken) == 0 {
+	if (len(strings.TrimSpace(rawToken))) == 0 {
 		return false
 	}
 
@@ -111,6 +112,10 @@ func (decoder *TextDecoder) Token() (Token, error) {
 	return decoder.token, decoder.err
 }
 
+func (decoder *TextDecoder) Err() error {
+	return decoder.err
+}
+
 func (decoder *TextDecoder) setStructField(field reflect.Value, token Token) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -118,55 +123,75 @@ func (decoder *TextDecoder) setStructField(field reflect.Value, token Token) (er
 		}
 	}()
 
-	switch token.Type.Kind() {
-	case reflect.String:
-		field.SetString(strings.TrimRight(token.RawValue, "\r"))
-	case reflect.Int32:
+	switch token.Type {
+	case StringUtf16:
+		trimmed := strings.TrimRight(token.RawValue, "\r")
+
+		if field.Kind() == reflect.String {
+			field.SetString(trimmed)
+			break
+		}
+
+		if field.Kind() == reflect.Slice && field.Type().Elem().Kind() == reflect.Uint16 {
+			field.Set(reflect.ValueOf(utf16.Encode([]rune(trimmed))))
+		}
+	case Signed32:
 		i, err := strconv.ParseInt(token.TrimmedValue(), 10, 32)
 		if err != nil {
 			return err
 		}
 
 		field.SetInt(i)
-	case reflect.Float32:
+	case Float:
 		f, err := strconv.ParseFloat(token.TrimmedValue(), 32)
 		if err != nil {
 			return err
 		}
 
 		field.SetFloat(f)
-	case reflect.Float64:
+	case Double:
 		f, err := strconv.ParseFloat(token.TrimmedValue(), 64)
 		if err != nil {
 			return err
 		}
 
 		field.SetFloat(f)
-	case reflect.Uint32:
+	case Unsigned32:
 		i, err := strconv.ParseUint(token.TrimmedValue(), 10, 32)
 		if err != nil {
 			return err
 		}
 
 		field.SetUint(i)
-	case reflect.Bool:
+	case Bool:
 		field.SetBool(token.TrimmedValue() == "1")
-	case reflect.Uint64:
+	case Unsigned64:
 		i, err := strconv.ParseUint(token.TrimmedValue(), 10, 64)
 		if err != nil {
 			return err
 		}
 
 		field.SetUint(i)
-	case reflect.Int64:
+	case Signed64:
 		i, err := strconv.ParseInt(token.TrimmedValue(), 10, 64)
 		if err != nil {
 			return err
 		}
 
 		field.SetInt(i)
+	case StringUtf8:
+		trimmed := strings.TrimRight(token.RawValue, "\r")
+
+		if field.Kind() == reflect.String {
+			field.SetString(trimmed)
+			break
+		}
+
+		if field.Kind() == reflect.Slice && field.Type().Elem().Kind() == reflect.Uint8 {
+			field.Set(reflect.ValueOf([]byte(trimmed)))
+		}
 	default:
-		return fmt.Errorf("cannot decode ldf type: %v", token.Type.Kind())
+		return fmt.Errorf("cannot decode ldf type: %v", token.Type)
 	}
 
 	return nil
@@ -190,6 +215,10 @@ func (decoder *TextDecoder) Decode(v any) error {
 		}
 
 		tokens[strings.TrimSpace(token.Name)] = token
+	}
+
+	if err := decoder.Err(); err != nil {
+		return err
 	}
 
 	structValue := reflect.ValueOf(v).Elem()

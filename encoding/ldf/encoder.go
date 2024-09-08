@@ -113,7 +113,7 @@ func (encoder *TextEncoder) Encode(v any) error {
 			encoder.w,
 			tokenName,
 			"=",
-			encoder.getValueType(value.Kind()),
+			int(encoder.getValueType(value.Kind())),
 			":",
 			rawValue,
 		)

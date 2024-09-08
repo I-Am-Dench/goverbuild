@@ -1,8 +1,10 @@
 package ldf_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"unsafe"
 
@@ -142,5 +144,75 @@ func TestUnmarshalIntegers(t *testing.T) {
 		if largeInts.Uint != 4294967295 {
 			t.Errorf("test unmarshal integers: uint{32}: expected 4294967295 but got %d", largeInts.Uint)
 		}
+	}
+}
+
+type Strings struct {
+	Std8  string `ldf:"STD8"`
+	Std16 string `ldf:"STD16"`
+
+	U16   ldf.Utf16String `ldf:"U16"`
+	Bytes []byte          `ldf:"BYTES"`
+}
+
+func testSimpleStrings(expected Strings, format string) error {
+	data := []byte(fmt.Sprintf(format, expected.Std8, expected.Std16))
+
+	actual := Strings{}
+	if err := ldf.Unmarshal(data, &actual); err != nil {
+		return err
+	}
+
+	if actual.Std8 != expected.Std8 {
+		return fmt.Errorf("expected \"%s\" but got \"%s\"", expected.Std8, actual.Std8)
+	}
+
+	if actual.Std16 != expected.Std16 {
+		return fmt.Errorf("expected \"%s\" but got \"%s\"", expected.Std16, actual.Std16)
+	}
+
+	return nil
+}
+
+func testEncodedStrings(expected Strings) error {
+	data := []byte(fmt.Sprintf("U16=0:%s,BYTES=13:%s", expected.U16.String(), string(expected.Bytes)))
+
+	actual := Strings{}
+	if err := ldf.Unmarshal(data, &actual); err != nil {
+		return err
+	}
+
+	if !slices.Equal(actual.U16, expected.U16) {
+		return fmt.Errorf("expected %v but got %v", expected.U16, actual.U16)
+	}
+
+	if !bytes.Equal(actual.Bytes, expected.Bytes) {
+		return fmt.Errorf("expected %v but got %v", expected.Bytes, actual.Bytes)
+	}
+
+	return nil
+}
+
+func TestUnmarshalStrings(t *testing.T) {
+	simpleStrings := Strings{
+		Std8:  "DO NOT GO TO PORTOBELLO",
+		Std16: "WORST MISTAKE OF MY LIFE",
+	}
+
+	if err := testSimpleStrings(simpleStrings, "STD8=0:%s,STD16=0:%s"); err != nil {
+		t.Errorf("test unmarshal strings: simple strings (0,0): %v", err)
+	}
+
+	if err := testSimpleStrings(simpleStrings, "STD8=13:%s,STD16=13:%s"); err != nil {
+		t.Errorf("test unmarshal strings: simple strings (13,13): %v", err)
+	}
+
+	encodedStrings := Strings{
+		U16:   ldf.StringToUtf16("Check this out: ӔŦഹ"),
+		Bytes: []byte("https://www.tcfriedrich.com"),
+	}
+
+	if err := testEncodedStrings(encodedStrings); err != nil {
+		t.Errorf("test unmarshal strings: encoded strings: %v", err)
 	}
 }
