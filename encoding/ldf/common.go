@@ -49,8 +49,6 @@ func (t ValueType) String() string {
 	}
 }
 
-var ()
-
 type Utf16String []uint16
 
 func StringToUtf16(s string) Utf16String {

@@ -38,3 +38,22 @@ func TestMarshal(t *testing.T) {
 	}
 
 }
+
+func TestMarshalStrings(t *testing.T) {
+	v := Strings{
+		Std8:  "Crazy? I was crazy once.",
+		Std16: "They put me in a room. A rubber room. A rubber room of rats.",
+		U16:   ldf.StringToUtf16("And the rats made me crazy."),
+		Bytes: []byte("I can't think of any more interesting strings."),
+	}
+
+	data, err := ldf.MarshalText(v)
+	if err != nil {
+		t.Fatalf("test marshal strings: %v", err)
+	}
+
+	expectedData := v.Format("STD8=13:%s,STD16=0:%s,U16=0:%s,BYTES=13:%s")
+	if !bytes.Equal(data, []byte(expectedData)) {
+		t.Errorf("test marshal strings:\nexpected = \"%s\"\nactual  = \"%s\"", expectedData, string(data))
+	}
+}

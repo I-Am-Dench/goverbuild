@@ -147,14 +147,6 @@ func TestUnmarshalIntegers(t *testing.T) {
 	}
 }
 
-type Strings struct {
-	Std8  string `ldf:"STD8"`
-	Std16 string `ldf:"STD16"`
-
-	U16   ldf.Utf16String `ldf:"U16"`
-	Bytes []byte          `ldf:"BYTES"`
-}
-
 func testSimpleStrings(expected Strings, format string) error {
 	data := []byte(fmt.Sprintf(format, expected.Std8, expected.Std16))
 
