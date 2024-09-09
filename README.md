@@ -55,3 +55,7 @@ Packages of data structures with defined layouts. This only really exists as I p
 **TODO:**
 - [ ] See [https://github.com/I-Am-Dench/goverbuild/blob/main/models/charxml/charxml.go#L1-L12](https://github.com/I-Am-Dench/goverbuild/blob/main/models/charxml/charxml.go#L1-L12)
 - [ ] charxml tests
+
+## References
+
+[^1]: https://docs.lu-dev.net/en/latest/
