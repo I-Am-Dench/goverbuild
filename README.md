@@ -1,6 +1,6 @@
 # GOverbuild
 
-> [!NOTE]
+> [!WARNING]
 > GOverbuild is currently in version 0. Please expect major changes to function and method signatures, data structures, and package structures without regards for backwards compatibility.
 
 GOverbuild is a Go library of implementations of common LEGO Universe data structures and encodings.
