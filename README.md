@@ -58,4 +58,4 @@ Packages of data structures with defined layouts. This only really exists as I p
 
 ## References
 
-[^1]: https://docs.lu-dev.net/en/latest/
+[^1]: <https://docs.lu-dev.net/en/latest/> LU Documenation
