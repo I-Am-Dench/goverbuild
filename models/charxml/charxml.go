@@ -175,8 +175,8 @@ type Character struct {
 }
 
 type Level struct {
-	Level     uint32 `xml:"l"`
-	SpeedBase uint32 `xml:"sb"`
+	Level     uint32 `xml:"l,attr"`
+	SpeedBase uint32 `xml:"sb,attr"`
 }
 
 type Obj struct {
