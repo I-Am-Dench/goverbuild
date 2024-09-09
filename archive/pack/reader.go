@@ -35,12 +35,32 @@ type Record struct {
 	IsCompressed bool
 }
 
+// Returns an io.Reader and md5 hash writer for the record's data. If the record is compressed,
+// the underlying io.Reader is wrapped by an *sid0.DataReader.
+//
+// The hash.Hash value contains the md5 chunksum for the uncompressed data, but only for
+// the data read out of the io.Reader.
+//
+// Example:
+//
+//	reader, hash, err := record.Section()
+//
+//	if err != nil {
+//	    return err
+//	}
+//
+//	// The contents of the reader must be read before calling hash.Sum(nil)
+//	if err := io.Copy(file, reader); err != nil {
+//	    return err
+//	}
+//
+//	fmt.Println(hash.Sum(nil)) // the resulting checksum
 func (record *Record) Section() (io.Reader, hash.Hash, error) {
 	reader := io.Reader(record.r)
 	if record.IsCompressed {
 		sd0, err := sid0.NewDataReader(reader, record.CompressedSize)
 		if err != nil {
-			return nil, nil, fmt.Errorf("pack: recrod: section: %w", err)
+			return nil, nil, fmt.Errorf("pack: record: section: %w", err)
 		}
 		reader = sd0
 	}
@@ -49,16 +69,6 @@ func (record *Record) Section() (io.Reader, hash.Hash, error) {
 	reader = io.TeeReader(reader, hash)
 
 	return reader, hash, nil
-
-	// if record.IsCompressed {
-	// 	reader, err := sid0.NewDataReader(record.r, record.CompressedSize)
-	// 	if err != nil {
-	// 		return nil, fmt.Errorf("pack: record: section: %w", err)
-	// 	}
-	// 	return reader, nil
-	// }
-
-	// return record.r, nil
 }
 
 type Pack struct {

@@ -145,6 +145,9 @@ func parseFile(line []byte) (*File, error) {
 	}, nil
 }
 
+// Uses the provided io.Reader to parse a manifest file per the specification found here: https://docs.lu-dev.net/en/latest/file-structures/manifest.html
+//
+// Manifest sections are not required to be in a specific order. The [version] section is allowed to come after the [files] section.
 func Read(r io.Reader) (*Manifest, error) {
 	sections := parseSections(r)
 
@@ -188,6 +191,8 @@ func Read(r io.Reader) (*Manifest, error) {
 	return manifest, nil
 }
 
+// Opens a file with the provided name and returns the resulting *Manifest from Read.
+// This function always closes the opened file whether Read returned an error or not.
 func Open(name string) (*Manifest, error) {
 	file, err := os.OpenFile(name, os.O_RDONLY, os.ModePerm)
 	if err != nil {

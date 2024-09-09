@@ -124,6 +124,9 @@ func readFiles(r internal.ReadSeekerAt) ([]*File, error) {
 	return files, errors.Join(errs...)
 }
 
+// Uses the provided io.Reader to parse a catalog file per the specification found here: https://docs.lu-dev.net/en/latest/file-structures/catalog.html
+//
+// This function is guaranteed to return a nil *Catalog when it encounters ANY error.
 func Read(r io.Reader) (*Catalog, error) {
 	readSeeker, ok := r.(internal.ReadSeekerAt)
 	if !ok {
@@ -153,6 +156,8 @@ func Read(r io.Reader) (*Catalog, error) {
 	return catalog, nil
 }
 
+// Opens a file with the provided name and returns the resulting *Catalog from Read.
+// This function always closes the opened file whether Read returned an error or not.
 func Open(path string) (*Catalog, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY, 0755)
 	if err != nil {
