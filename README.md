@@ -18,7 +18,7 @@ go get -u github.com/I-Am-Dench/goverbuild@latest
 A small collection of analysis tools is included within the `goverbuild` program which can be installed with the following command:
 
 ```bash
-go install github.com/I-Am-Dench/cmd/goverbuild@latest
+go install github.com/I-Am-Dench/goverbuild/cmd/goverbuild@latest
 ```
 
 More information can be found here: [`/cmd/goverbuild/README.md`](cmd/goverbuild/README.md)
