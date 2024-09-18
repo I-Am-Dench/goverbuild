@@ -54,6 +54,27 @@ func TestMarshalStrings(t *testing.T) {
 
 	expectedData := v.Format("STD8=13:%s,STD16=0:%s,U16=0:%s,BYTES=13:%s")
 	if !bytes.Equal(data, []byte(expectedData)) {
-		t.Errorf("test marshal strings:\nexpected = \"%s\"\nactual  = \"%s\"", expectedData, string(data))
+		t.Errorf("test marshal strings:\nexpected = \"%s\"\nactual   = \"%s\"", expectedData, string(data))
+	}
+}
+
+func TestMarshalOmit(t *testing.T) {
+	v := struct {
+		Empty    string `ldf:"empty,omitempty"`
+		NotEmpty string `ldf:"not_empty,omitempty"`
+	}{
+		Empty:    "",
+		NotEmpty: "NOT EMPTY",
+	}
+
+	expected := []byte("not_empty=0:NOT EMPTY")
+
+	actual, err := ldf.MarshalText(v)
+	if err != nil {
+		t.Fatalf("test marshal omit: %v", err)
+	}
+
+	if !bytes.Equal(actual, expected) {
+		t.Errorf("test marshal omit:\nexpected = \"%s\"\nactual   = \"%s\"", expected, actual)
 	}
 }
