@@ -6,7 +6,6 @@ import (
 	"io"
 	"reflect"
 	"strconv"
-	"strings"
 	"unicode/utf16"
 )
 
@@ -30,16 +29,16 @@ func NewTextEncoder(w io.Writer, delim ...string) *TextEncoder {
 	return &TextEncoder{w, d, false}
 }
 
-func (encoder *TextEncoder) encodeValue(value reflect.Value, forceUtf16 bool) (string, ValueType, error) {
+func (encoder *TextEncoder) encodeValue(value reflect.Value, raw bool) (string, ValueType, error) {
 	if value.Type() == utf16Type {
 		return value.Interface().(Utf16String).String(), StringUtf16, nil
 	}
 
 	switch k := value.Kind(); k {
 	case reflect.String:
-		t := StringUtf8
-		if forceUtf16 {
-			t = StringUtf16
+		t := StringUtf16
+		if raw {
+			t = StringUtf8
 		}
 		return value.String(), t, nil
 	case reflect.Int, reflect.Int32, reflect.Int64:
@@ -83,68 +82,6 @@ func (encoder *TextEncoder) encodeValue(value reflect.Value, forceUtf16 bool) (s
 	}
 }
 
-// func (encoder *TextEncoder) valueToString(value reflect.Value) (string, error) {
-// 	if value.Type() == utf16Type {
-// 		return value.Interface().(Utf16String).String(), nil
-// 	}
-
-// 	switch value.Kind() {
-// 	case reflect.String:
-// 		return value.String(), nil
-// 	case reflect.Int, reflect.Int32, reflect.Int64:
-// 		return fmt.Sprint(value.Int()), nil
-// 	case reflect.Float32:
-// 		return fmt.Sprint(float32(value.Float())), nil
-// 	case reflect.Float64:
-// 		return fmt.Sprint(value.Float()), nil
-// 	case reflect.Uint, reflect.Uint32, reflect.Uint64:
-// 		return fmt.Sprint(value.Uint()), nil
-// 	case reflect.Bool:
-// 		if value.Bool() {
-// 			return "1", nil
-// 		} else {
-// 			return "0", nil
-// 		}
-// 	case reflect.Slice:
-// 		sliceType := value.Type().Elem()
-
-// 		if sliceType.Kind() == reflect.Uint16 {
-// 			return string(utf16.Decode(value.Interface().([]uint16))), nil
-// 		}
-
-// 		if sliceType.Kind() == reflect.Uint8 {
-// 			return string(value.Interface().([]byte)), nil
-// 		}
-
-// 		fallthrough
-// 	default:
-// 		return "", fmt.Errorf("cannot marshal type: %v", value.Type())
-// 	}
-// }
-
-// func (encoder *TextEncoder) getValueType(value reflect.Value) ValueType {
-// 	switch value.Kind() {
-// 	case reflect.String:
-// 		return StringUtf16
-// 	case reflect.Int32:
-// 		return Signed32
-// 	case reflect.Float32:
-// 		return Float
-// 	case reflect.Float64:
-// 		return Double
-// 	case reflect.Uint32:
-// 		return Unsigned32
-// 	case reflect.Bool:
-// 		return Bool
-// 	case reflect.Uint64:
-// 		return Unsigned64
-// 	case reflect.Int64:
-// 		return Signed64
-// 	default:
-// 		panic(fmt.Errorf("cannot get value type for kind: %v", value.Kind()))
-// 	}
-// }
-
 func (encoder *TextEncoder) Encode(v any) error {
 	if v == nil {
 		return nil
@@ -166,16 +103,16 @@ func (encoder *TextEncoder) Encode(v any) error {
 			continue
 		}
 
-		tokenName, directive, _ := strings.Cut(tagValue, ",")
+		tokenName, options := parseTag(tagValue)
 		if len(tokenName) == 0 {
 			tokenName = field.Name
 		}
 
-		if directive == "omitempty" && value.IsZero() {
+		if options.OmitEmpty && value.IsZero() {
 			continue
 		}
 
-		rawValue, valueType, err := encoder.encodeValue(value, directive == "utf16")
+		rawValue, valueType, err := encoder.encodeValue(value, options.Raw)
 		if err != nil {
 			return fmt.Errorf("ldf: encoder: %w", err)
 		}

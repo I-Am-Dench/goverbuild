@@ -63,7 +63,7 @@ func (b LdfBool) Format(f fmt.State, verb rune) {
 }
 
 type Basic struct {
-	String  string  `ldf:"STRING,utf16"`
+	String  string  `ldf:"STRING"`
 	Int32   int32   `ldf:"INT32"`
 	Float   float32 `ldf:"FLOAT"`
 	Double  float64 `ldf:"DOUBLE"`
@@ -76,8 +76,8 @@ func (basic Basic) Format(format string) string {
 }
 
 type Strings struct {
-	Std8  string `ldf:"STD8"`
-	Std16 string `ldf:"STD16,utf16"`
+	Std8  string `ldf:"STD8,raw"`
+	Std16 string `ldf:"STD16"`
 
 	U16   ldf.Utf16String `ldf:"U16"`
 	Bytes []byte          `ldf:"BYTES"`

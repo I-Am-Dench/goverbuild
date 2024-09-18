@@ -2,6 +2,7 @@ package ldf
 
 import (
 	"fmt"
+	"strings"
 	"unicode/utf16"
 )
 
@@ -57,4 +58,29 @@ func StringToUtf16(s string) Utf16String {
 
 func (s Utf16String) String() string {
 	return string(utf16.Decode(s))
+}
+
+type tagOptions struct {
+	OmitEmpty bool
+	Raw       bool
+}
+
+func parseTag(s string) (string, tagOptions) {
+	tokenName, options, _ := strings.Cut(s, ",")
+
+	o := tagOptions{}
+
+	for len(options) > 0 {
+		var option string
+		option, options, _ = strings.Cut(options, ",")
+
+		switch option {
+		case "omitempty":
+			o.OmitEmpty = true
+		case "raw":
+			o.Raw = true
+		}
+	}
+
+	return tokenName, o
 }
