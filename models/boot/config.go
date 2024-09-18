@@ -4,10 +4,10 @@ type Config struct {
 	ServerName       string `ldf:"SERVERNAME"`
 	PatchServerIP    string `ldf:"PATCHSERVERIP"`
 	AuthServerIP     string `ldf:"AUTHSERVERIP"`
-	PatchServerPort  int    `ldf:"PATCHSERVERPORT"`
-	Logging          int    `ldf:"LOGGING"`
-	DataCenterID     uint   `ldf:"DATACENTERID"`
-	CPCode           int    `ldf:"CPCODE"`
+	PatchServerPort  int32  `ldf:"PATCHSERVERPORT"`
+	Logging          int32  `ldf:"LOGGING"`
+	DataCenterID     uint32 `ldf:"DATACENTERID"`
+	CPCode           int32  `ldf:"CPCODE"`
 	AkamaiDLM        bool   `ldf:"AKAMAIDLM"`
 	PatchServerDir   string `ldf:"PATCHSERVERDIR"`
 	UGCUse3dServices bool   `ldf:"UGCUSE3DSERVICES"`
