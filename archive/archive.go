@@ -14,8 +14,12 @@ var (
 	})
 )
 
+func ToArchivePath(s string) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.ToLower(s), "/", "\\"))
+}
+
 func GetCrc(s string) uint32 {
-	cleaned := strings.TrimSpace(strings.ReplaceAll(strings.ToLower(s), "/", "\\"))
+	cleaned := ToArchivePath(s)
 	data := append([]byte(cleaned), []byte{0x00, 0x00, 0x00, 0x00}...)
 
 	hash := crc.NewHashWithTable(Crc)
