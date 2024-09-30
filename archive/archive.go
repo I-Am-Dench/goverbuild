@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/snksoft/crc"
@@ -16,6 +17,10 @@ var (
 
 func ToArchivePath(s string) string {
 	return strings.TrimSpace(strings.ReplaceAll(strings.ToLower(s), "/", "\\"))
+}
+
+func ToSysPath(s string) string {
+	return strings.ReplaceAll(s, "\\", string(filepath.Separator))
 }
 
 func GetCrc(s string) uint32 {

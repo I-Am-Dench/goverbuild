@@ -33,7 +33,7 @@ type quickCheck struct {
 }
 
 func (qc *quickCheck) Path() string {
-	return qc.path
+	return archive.ToSysPath(qc.path)
 }
 
 func (qc *quickCheck) LastModified() time.Time {
