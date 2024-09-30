@@ -55,7 +55,7 @@ func (qc *quickCheck) Check(file *os.File) error {
 	}
 
 	expected := fmt.Sprintf("%s,%d", FormatQuickCheckTime(qc.lastModified), qc.size)
-	actual := fmt.Sprintf("%s,%d", FormatQuickCheckTime(SysModTime(stat)), stat.Size())
+	actual := fmt.Sprintf("%s,%d", FormatQuickCheckTime(stat.ModTime()), stat.Size())
 	if expected != actual {
 		return fmt.Errorf("%w: (expected: %s) != (actual: %s)", ErrMismatchedQuickCheck, expected, actual)
 	}
@@ -308,7 +308,7 @@ func (cache *Cache) Push(path string, file *os.File) error {
 
 	qc := &quickCheck{
 		path:         path,
-		lastModified: SysModTime(stat),
+		lastModified: stat.ModTime(),
 		size:         stat.Size(),
 		hash:         hash.Sum(nil),
 	}

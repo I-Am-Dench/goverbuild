@@ -58,7 +58,7 @@ func (env *Env) AddResFile(name ...string) (check, error) {
 
 	return check{
 		Path:    archive.ToArchivePath(path),
-		ModTime: cache.SysModTime(stat),
+		ModTime: stat.ModTime(),
 		Size:    int64(written),
 		Hash:    hash.Sum(nil),
 	}, nil
