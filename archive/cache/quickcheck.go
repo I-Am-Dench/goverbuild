@@ -69,12 +69,15 @@ func (qc *quickCheck) Check(file *os.File) error {
 
 type QuickCheck interface {
 	Path() string
+	SysPath() string
 	LastModified() time.Time
 	Size() int64
 	Hash() []byte
 
 	Check(*os.File) error
 }
+
+type RangeFunc = func(qc QuickCheck) bool
 
 type Cache struct {
 	sm sync.Map
@@ -140,7 +143,7 @@ func (cache *Cache) parseLine(line string) (*quickCheck, error) {
 	}, nil
 }
 
-func (cache *Cache) ForEach(f func(qc QuickCheck) bool) {
+func (cache *Cache) ForEach(f RangeFunc) {
 	cache.sm.Range(func(key, value any) bool {
 		return f(value.(QuickCheck))
 	})

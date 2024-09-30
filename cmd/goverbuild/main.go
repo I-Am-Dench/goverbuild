@@ -10,6 +10,7 @@ var Commands = CommandList{
 	"catalog":  doCatalog,
 	"manifest": doManifest,
 	"extract":  doExtract,
+	"cache":    doCache,
 }
 
 func main() {

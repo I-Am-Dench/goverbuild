@@ -11,6 +11,8 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+
+	"github.com/I-Am-Dench/goverbuild/archive"
 )
 
 var (
@@ -33,6 +35,14 @@ func (file *File) Name() string {
 	return file.name
 }
 
+func (file *File) OriginalSize() int64 {
+	return int64(file.originalSize)
+}
+
+func (file *File) OriginalHash() []byte {
+	return file.originalHash
+}
+
 func (file *File) String() string {
 	return file.name
 }
@@ -42,6 +52,13 @@ type Manifest struct {
 	Name    string
 
 	Files []*File
+
+	byPath map[string]*File
+}
+
+func (manifest *Manifest) GetFile(path string) (*File, bool) {
+	f, ok := manifest.byPath[archive.ToArchivePath(path)]
+	return f, ok
 }
 
 func parseSections(r io.Reader) Sections {
@@ -152,7 +169,8 @@ func Read(r io.Reader) (*Manifest, error) {
 	sections := parseSections(r)
 
 	manifest := &Manifest{
-		Files: []*File{},
+		Files:  []*File{},
+		byPath: map[string]*File{},
 	}
 
 	version, ok := sections["version"]
@@ -171,6 +189,7 @@ func Read(r io.Reader) (*Manifest, error) {
 	files, ok := sections["files"]
 	if !ok {
 		manifest.Files = []*File{}
+		manifest.byPath = map[string]*File{}
 		return manifest, nil
 	}
 
@@ -181,6 +200,7 @@ func Read(r io.Reader) (*Manifest, error) {
 			errs = append(errs, err)
 		} else {
 			manifest.Files = append(manifest.Files, file)
+			manifest.byPath[archive.ToArchivePath(file.name)] = file
 		}
 	}
 
