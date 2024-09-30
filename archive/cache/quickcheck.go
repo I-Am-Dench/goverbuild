@@ -33,6 +33,10 @@ type quickCheck struct {
 }
 
 func (qc *quickCheck) Path() string {
+	return qc.path
+}
+
+func (qc *quickCheck) SysPath() string {
 	return archive.ToSysPath(qc.path)
 }
 
@@ -214,12 +218,13 @@ func (cache *Cache) flushAll() error {
 // }
 
 func (cache *Cache) flushAdded() error {
-	var err error
-	cache.ForEach(func(qc QuickCheck) bool {
-		_, err = fmt.Fprintf(cache.f, "%s,%d.%06d,%d,%x\n", qc.Path(), qc.LastModified().Unix(), qc.LastModified().Nanosecond(), qc.Size(), qc.Hash())
-		return err == nil
-	})
-	return err
+	for _, qc := range cache.added {
+		if _, err := fmt.Fprintf(cache.f, "%s,%d.%06d,%d,%x\n", qc.Path(), qc.LastModified().Unix(), qc.LastModified().Nanosecond(), qc.Size(), qc.Hash()); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (cache *Cache) flush(all bool) (err error) {
@@ -249,20 +254,6 @@ func (cache *Cache) varFlush() error {
 	return cache.flush(rewrite)
 }
 
-// func (cache *Cache) flush() error {
-// 	// If a previously loaded entry has been modified,
-// 	// we'll have to rewrite the whole file since there will most
-// 	// likely be entries that appear after this one, which need to be shifted down.
-// 	// Rewritting the whole file is the simpilest solution.
-// 	rewrite := cache.modified.Load() > 0
-
-// 	if rewrite {
-// 		return cache.flushAll()
-// 	} else {
-// 		return cache.flushAdded()
-// 	}
-// }
-
 func (cache *Cache) Flush() error {
 	if err := cache.flush(true); err != nil {
 		return fmt.Errorf("cache: flush: %w", err)
@@ -273,7 +264,7 @@ func (cache *Cache) Flush() error {
 func (cache *Cache) shouldFlush() bool {
 	cache.addedMux.RLock()
 	defer cache.addedMux.RUnlock()
-	return uint32(len(cache.added))+cache.modified.Load() > uint32(cache.flushThreshold)
+	return uint32(len(cache.added))+cache.modified.Load() >= uint32(cache.flushThreshold)
 }
 
 func (cache *Cache) push(qc *quickCheck) error {
@@ -295,7 +286,19 @@ func (cache *Cache) push(qc *quickCheck) error {
 	return nil
 }
 
+func (cache *Cache) Get(path string) (QuickCheck, bool) {
+	v, ok := cache.sm.Load(archive.ToArchivePath(path))
+	if !ok {
+		return nil, false
+	}
+	return v.(QuickCheck), true
+}
+
 func (cache *Cache) Push(path string, file *os.File) error {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("cache: add: %w", err)
+	}
+
 	hash := md5.New()
 	if _, err := io.Copy(hash, file); err != nil {
 		return fmt.Errorf("cache: add: %w", err)
@@ -307,7 +310,7 @@ func (cache *Cache) Push(path string, file *os.File) error {
 	}
 
 	qc := &quickCheck{
-		path:         path,
+		path:         archive.ToArchivePath(path),
 		lastModified: stat.ModTime(),
 		size:         stat.Size(),
 		hash:         hash.Sum(nil),
@@ -320,7 +323,11 @@ func (cache *Cache) Push(path string, file *os.File) error {
 	return nil
 }
 
-func (cache *Cache) Load() error {
+func (cache *Cache) FlushThreshold(threshold int) {
+	cache.flushThreshold = threshold
+}
+
+func (cache *Cache) load() error {
 	if _, err := cache.f.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("cache: load: %w", err)
 	}
@@ -330,7 +337,7 @@ func (cache *Cache) Load() error {
 	for scanner.Scan() {
 		qc, err := cache.parseLine(scanner.Text())
 		if err == nil {
-			cache.push(qc)
+			cache.sm.Store(qc.Path(), qc)
 		}
 	}
 
@@ -360,19 +367,20 @@ func New(f *os.File, flush ...int) *Cache {
 
 		added: []*quickCheck{},
 	}
+	cache.canFlush.Store(true)
 
 	return cache
 }
 
 func Open(name string, flush ...int) (*Cache, error) {
-	file, err := os.OpenFile(name, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0755)
+	file, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
 		return nil, fmt.Errorf("cache: open: %w", err)
 	}
 
 	cache := New(file, flush...)
 
-	if err := cache.Load(); err != nil {
+	if err := cache.load(); err != nil {
 		file.Close()
 		return nil, err
 	}
