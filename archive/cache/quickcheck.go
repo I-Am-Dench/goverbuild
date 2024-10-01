@@ -83,7 +83,6 @@ type Cache struct {
 	sm sync.Map
 
 	canFlush atomic.Bool
-	// flushMux sync.Mutex
 
 	f *os.File
 
@@ -149,6 +148,7 @@ func (cache *Cache) ForEach(f RangeFunc) {
 	})
 }
 
+// Writes the cache's contents to the provided writer.
 func (cache *Cache) WriteTo(w io.Writer) (n int64, err error) {
 	written := int64(0)
 	cache.ForEach(func(qc QuickCheck) bool {
@@ -189,37 +189,6 @@ func (cache *Cache) flushAll() error {
 	return nil
 }
 
-// func (cache *Cache) flushAll() error {
-// 	stat, err := cache.f.Stat()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if _, err := cache.f.Seek(0, io.SeekStart); err != nil {
-// 		return err
-// 	}
-
-// 	size := stat.Size()
-
-// 	written := int64(0)
-// 	cache.ForEach(func(qc QuickCheck) bool {
-// 		var n int
-// 		n, err = fmt.Fprintf(cache.f, "%s,%d.%06d,%d,%x\n", qc.Path(), qc.LastModified().Unix(), qc.LastModified().Nanosecond(), qc.Size(), qc.Hash())
-// 		written += int64(n)
-// 		return err == nil
-// 	})
-
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	if written < size {
-// 		return cache.f.Truncate(written)
-// 	}
-
-// 	return nil
-// }
-
 func (cache *Cache) flushAdded() error {
 	for _, qc := range cache.added {
 		if _, err := fmt.Fprintf(cache.f, "%s,%d.%06d,%d,%x\n", qc.Path(), qc.LastModified().Unix(), qc.LastModified().Nanosecond(), qc.Size(), qc.Hash()); err != nil {
@@ -248,15 +217,18 @@ func (cache *Cache) flush(all bool) (err error) {
 }
 
 func (cache *Cache) varFlush() error {
-	// If a previously loaded entry has been modified,
-	// we'll have to rewrite the whole file since there will most
-	// likely be entries that appear after this one, which need to be shifted down.
-	// Rewritting the whole file is the simplest solution.
+	// If a previously loaded entry has been modified, we'll have
+	// to rewrite the whole file since there will most likely be
+	// entries that appear after this one, which need to be shifted down.
+	// There are definitely ways to optimize which parts of the file needs
+	// to rewritten, but rewritting the whole is the simplest solution.
 	rewrite := cache.modified.Load() > 0
 
 	return cache.flush(rewrite)
 }
 
+// Writes the cache's contents, in it's entirety, to the underlying *os.File, and resets
+// the cache's internal state.
 func (cache *Cache) Flush() error {
 	if err := cache.flush(true); err != nil {
 		return fmt.Errorf("cache: flush: %w", err)
@@ -289,6 +261,7 @@ func (cache *Cache) push(qc *quickCheck) error {
 	return nil
 }
 
+// Returns the QuickCheck value for the given path.
 func (cache *Cache) Get(path string) (QuickCheck, bool) {
 	v, ok := cache.sm.Load(archive.ToArchivePath(path))
 	if !ok {
@@ -297,6 +270,12 @@ func (cache *Cache) Get(path string) (QuickCheck, bool) {
 	return v.(QuickCheck), true
 }
 
+// Sets the QuickCheck of the provided file to the given path as its key. The path is
+// always passed through archive.ToArchivePath before being stored.
+//
+// If the number of changes (# modifications + # additions) >= the configured flush threshold,
+// the cache's contents are flushed to underlying *os.File. The result of this flush is NOT
+// guaranteed to be equivalent to calling Flush.
 func (cache *Cache) Push(path string, file *os.File) error {
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("cache: add: %w", err)
@@ -347,6 +326,8 @@ func (cache *Cache) load() error {
 	return nil
 }
 
+// Flushes the cache's contents, if necessary, to the underlying *os.File,
+// and then closes the file.
 func (cache *Cache) Close() error {
 	if cache.shouldFlush() {
 		if err := cache.Flush(); err != nil {
