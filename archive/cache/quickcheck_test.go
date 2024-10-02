@@ -197,7 +197,7 @@ func (env *Env) CompareLines(expected []string) error {
 		return err
 	}
 
-	actual := strings.Split(string(data), "\n")
+	actual := strings.Split(strings.TrimSpace(string(data)), "\n")
 	sort.Strings(actual)
 
 	if len(expected) != len(actual) {
@@ -399,7 +399,11 @@ func sortedLines(cachefile *cache.Cache) []string {
 	buf := &bytes.Buffer{}
 	cachefile.WriteTo(buf)
 
-	lines := strings.Split(buf.String(), "\n")
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) == 1 && len(lines[0]) == 0 {
+		return []string{}
+	}
+
 	sort.Strings(lines)
 
 	return lines
@@ -528,5 +532,48 @@ func TestQuickCheckFlush(t *testing.T) {
 
 	if err := env.TestFlushed(cachefile); err != nil {
 		t.Errorf("modify files: %v", err)
+	}
+}
+
+func TestQuickCheckRead(t *testing.T) {
+	if err := os.MkdirAll("testdata", 0755); err != nil {
+		t.Fatalf("quick check: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll("testdata"); err != nil {
+			t.Log(err)
+		}
+	}()
+
+	data := `data\1,100.000001,0,aaaaaaaa
+data\2,200.000020,1,bbbbbbbb
+data\3,300.000300,2,cccccccc
+data\4,400.004000,3,dddddddd
+data\5,500.050000,4,eeeeeeee
+`
+
+	file, err := os.OpenFile("testdata/quickcheck.txt", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	if err != nil {
+		t.Fatalf("quick check: %v", err)
+	}
+
+	cachefile := cache.New(file)
+	defer cachefile.Close()
+
+	if err := cachefile.Read(bytes.NewBuffer([]byte(data))); err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	expectedLines := strings.Split(strings.TrimSpace(data), "\n")
+	actualLines := sortedLines(cachefile)
+
+	if len(expectedLines) != len(actualLines) {
+		t.Fatalf("read: expected %d lines but got %d", len(expectedLines), len(actualLines))
+	}
+
+	for i, line := range actualLines {
+		if line != strings.TrimSpace(expectedLines[i]) {
+			t.Errorf("read: expected %s but got %s", line, expectedLines[i])
+		}
 	}
 }

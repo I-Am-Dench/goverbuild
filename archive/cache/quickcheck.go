@@ -309,18 +309,24 @@ func (cache *Cache) FlushThreshold(threshold int) {
 	cache.flushThreshold = threshold
 }
 
-func (cache *Cache) load() error {
-	if _, err := cache.f.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("cache: load: %w", err)
-	}
-
-	scanner := bufio.NewScanner(cache.f)
+// Parses the contents of provided io.Reader and stores valid QuickCheck
+// values into the cache. Read returns the first parse error that occurs
+// or any error that is returned from the provided io.Reader. Valid QuickCheck
+// values parsed prior to a parse error are still stored.
+func (cache *Cache) Read(r io.Reader) error {
+	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
 		qc, err := cache.parseLine(scanner.Text())
-		if err == nil {
-			cache.sm.Store(qc.Path(), qc)
+		if err != nil {
+			return fmt.Errorf("cache: read: %w", err)
 		}
+
+		cache.sm.Store(qc.Path(), qc)
+	}
+
+	if scanner.Err() != nil {
+		return fmt.Errorf("cache: read: %w", scanner.Err())
 	}
 
 	return nil
@@ -364,7 +370,7 @@ func Open(name string, flush ...int) (*Cache, error) {
 
 	cache := New(file, flush...)
 
-	if err := cache.load(); err != nil {
+	if err := cache.Read(file); err != nil {
 		file.Close()
 		return nil, err
 	}
