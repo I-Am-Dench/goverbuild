@@ -344,6 +344,10 @@ func (cache *Cache) Close() error {
 	return cache.f.Close()
 }
 
+// Creates a new *Cache with an optional flush threshold.
+// The provided *os.File is used as persistent storage for the cache's
+// QuickCheck values. New does NOT parse and store the contents of the
+// given file.
 func New(f *os.File, flush ...int) *Cache {
 	threshold := 0
 	if len(flush) > 0 {
@@ -362,6 +366,12 @@ func New(f *os.File, flush ...int) *Cache {
 	return cache
 }
 
+// Creates a new *Cache with an optional flush threshold from the file
+// specified by name. Open creates the file if it doesn't already exist.
+//
+// If opening the file does not return an error, Open parses and stores the
+// contents of that file. If an error occurs when reading the file, the file is
+// immediately closed and that error is returned.
 func Open(name string, flush ...int) (*Cache, error) {
 	file, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, 0755)
 	if err != nil {
