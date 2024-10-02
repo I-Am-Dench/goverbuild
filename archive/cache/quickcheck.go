@@ -242,7 +242,7 @@ func (cache *Cache) shouldFlush() bool {
 	return uint32(len(cache.added))+cache.modified.Load() >= uint32(cache.flushThreshold)
 }
 
-func (cache *Cache) push(qc *quickCheck) error {
+func (cache *Cache) store(qc *quickCheck) error {
 	_, ok := cache.sm.LoadOrStore(qc.Path(), qc)
 
 	if ok {
@@ -276,7 +276,7 @@ func (cache *Cache) Get(path string) (QuickCheck, bool) {
 // If the number of changes (# modifications + # additions) >= the configured flush threshold,
 // the cache's contents are flushed to underlying *os.File. The result of this flush is NOT
 // guaranteed to be equivalent to calling Flush.
-func (cache *Cache) Push(path string, file *os.File) error {
+func (cache *Cache) Store(path string, file *os.File) error {
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("cache: add: %w", err)
 	}
@@ -298,7 +298,7 @@ func (cache *Cache) Push(path string, file *os.File) error {
 		hash:         hash.Sum(nil),
 	}
 
-	if err := cache.push(qc); err != nil {
+	if err := cache.store(qc); err != nil {
 		return fmt.Errorf("cache: add: %w", err)
 	}
 

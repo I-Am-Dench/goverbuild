@@ -78,7 +78,7 @@ func (env *Env) ModifyResFile(cachefile *cache.Cache, name string) error {
 		return err
 	}
 
-	if err := cachefile.Push(filepath.Join("res", name), file); err != nil {
+	if err := cachefile.Store(filepath.Join("res", name), file); err != nil {
 		return err
 	}
 
@@ -89,7 +89,7 @@ func (env *Env) OpenResFile(name string) (*os.File, error) {
 	return os.OpenFile(filepath.Join(env.Dir, "res", name), os.O_RDWR, 0755)
 }
 
-func (env *Env) PushResFile(cachefile *cache.Cache, name ...string) error {
+func (env *Env) StoreResFile(cachefile *cache.Cache, name ...string) error {
 	quickcheck, resPath, err := env.AddResFile(name...)
 	if err != nil {
 		return err
@@ -101,7 +101,7 @@ func (env *Env) PushResFile(cachefile *cache.Cache, name ...string) error {
 	}
 	defer file.Close()
 
-	return cachefile.Push(quickcheck.Path, file)
+	return cachefile.Store(quickcheck.Path, file)
 }
 
 func (env *Env) CheckResFile(cachefile *cache.Cache, name string) error {
@@ -334,8 +334,8 @@ func TestQuickCheckBasic(t *testing.T) {
 
 	t.Log("-- test: add files")
 	if err := errors.Join(
-		env.PushResFile(cachefile, "added.txt"),
-		env.PushResFile(cachefile, "to_be_modified.txt"),
+		env.StoreResFile(cachefile, "added.txt"),
+		env.StoreResFile(cachefile, "to_be_modified.txt"),
 	); err != nil {
 		t.Fatalf("add files: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestQuickCheckBasic(t *testing.T) {
 		t.Fatalf("modify file (no change): %v", err)
 	}
 
-	if err := cachefile.Push("res/to_be_modified.txt", file); err != nil {
+	if err := cachefile.Store("res/to_be_modified.txt", file); err != nil {
 		file.Close()
 		t.Fatalf("modify file (no changes): %v", err)
 	}
@@ -371,7 +371,7 @@ func TestQuickCheckBasic(t *testing.T) {
 		t.Fatalf("modify file (with changes): %v", err)
 	}
 
-	if err := cachefile.Push("res/to_be_modified.txt", file); err != nil {
+	if err := cachefile.Store("res/to_be_modified.txt", file); err != nil {
 		file.Close()
 		t.Fatalf("modify file (with changes): %v", err)
 	}
@@ -426,7 +426,7 @@ func TestQuickCheckFlush(t *testing.T) {
 	expectedLines := sortedLines(cachefile)
 
 	t.Log("-- test: add 1")
-	if err := env.PushResFile(cachefile); err != nil {
+	if err := env.StoreResFile(cachefile); err != nil {
 		t.Fatalf("add 1: %v", err)
 	}
 
@@ -436,11 +436,11 @@ func TestQuickCheckFlush(t *testing.T) {
 
 	t.Log("-- test: add 5")
 	if err := errors.Join(
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
 	); err != nil {
 		t.Fatalf("add 5: %v", err)
 	}
@@ -451,10 +451,10 @@ func TestQuickCheckFlush(t *testing.T) {
 
 	t.Log("-- test: add 4 (causes flush)")
 	if err := errors.Join(
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
 	); err != nil {
 		t.Fatalf("add 4 (causes flush): %v", err)
 	}
@@ -467,15 +467,15 @@ func TestQuickCheckFlush(t *testing.T) {
 
 	t.Log("-- test: add 9")
 	if err := errors.Join(
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
 	); err != nil {
 		t.Fatalf("add 9: %v", err)
 	}
@@ -486,12 +486,12 @@ func TestQuickCheckFlush(t *testing.T) {
 
 	t.Log("-- test: add 6 (causes flush)")
 	if err := errors.Join(
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile),
-		env.PushResFile(cachefile, "modify_me_1.txt"),
-		env.PushResFile(cachefile, "modify_me_2.txt"),
-		env.PushResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile),
+		env.StoreResFile(cachefile, "modify_me_1.txt"),
+		env.StoreResFile(cachefile, "modify_me_2.txt"),
+		env.StoreResFile(cachefile),
 	); err != nil {
 		t.Fatalf("add 6 (causes flush): %v", err)
 	}

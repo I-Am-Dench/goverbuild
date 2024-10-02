@@ -81,7 +81,7 @@ func doCache(args []string) {
 		if entry.OriginalSize() != qc.Size() || !bytes.Equal(entry.OriginalHash(), qc.Hash()) {
 			log.Printf("%s: manifest mismatch...not updating", qc.Path())
 		} else {
-			if err := cachefile.Push(qc.Path(), file); err != nil {
+			if err := cachefile.Store(qc.Path(), file); err != nil {
 				log.Printf("%s: %v", qc.Path(), err)
 			} else if *verbose {
 				fmt.Printf("goverbuild: %s: updated quick check entry\n", qc.Path())
