@@ -53,8 +53,8 @@ func testRead(expected *manifest.Manifest, expectedEntries []string, r io.Reader
 
 	errs := []error{}
 	for i, entry := range actual.Files {
-		if entry.Name != expectedEntries[i] {
-			errs = append(errs, fmt.Errorf("manifest: expected %s, but got %s", expectedEntries[i], entry.Name))
+		if entry.Path != expectedEntries[i] {
+			errs = append(errs, fmt.Errorf("manifest: expected %s, but got %s", expectedEntries[i], entry.Path))
 		}
 	}
 

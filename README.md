@@ -32,7 +32,7 @@ Packages related to `.pk` (pack), `.pki` (catalog), and `.txt` (manifest) files.
 **TODO:**
 - [ ] pack writer
 - [ ] catalog writer
-- [ ] manifest writer
+- [x] manifest writer
 - [ ] pack, catalog, and manifest tests
 
 ### `/compress`
