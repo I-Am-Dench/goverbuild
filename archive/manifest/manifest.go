@@ -21,42 +21,28 @@ var (
 
 type Sections = map[string][][]byte
 
-type File struct {
-	name string
+type Entry struct {
+	Name string
 
-	originalSize int
-	originalHash []byte
+	UncompressedSize     int64
+	UncompressedChecksum []byte
 
-	compressedSize int
-	compressedHash []byte
-}
-
-func (file *File) Name() string {
-	return file.name
-}
-
-func (file *File) OriginalSize() int64 {
-	return int64(file.originalSize)
-}
-
-func (file *File) OriginalHash() []byte {
-	return file.originalHash
-}
-
-func (file *File) String() string {
-	return file.name
+	CompressedSize     int64
+	CompressedChecksum []byte
 }
 
 type Manifest struct {
 	Version int
 	Name    string
 
-	Files []*File
+	Sections map[string][][]byte
 
-	byPath map[string]*File
+	Files []*Entry
+
+	byPath map[string]*Entry
 }
 
-func (manifest *Manifest) GetFile(path string) (*File, bool) {
+func (manifest *Manifest) GetEntry(path string) (*Entry, bool) {
 	f, ok := manifest.byPath[archive.ToArchivePath(path)]
 	return f, ok
 }
@@ -123,25 +109,25 @@ func parseVersion(line []byte) (int, string, error) {
 	return version, name, nil
 }
 
-func parseFile(line []byte) (*File, error) {
+func parseEntry(line []byte) (*Entry, error) {
 	parts := bytes.Split(line, []byte(","))
 	if len(parts) < 6 {
 		return nil, fmt.Errorf("manifest: malformed file line: %s", line)
 	}
 
-	originalSize, err := strconv.Atoi(string(parts[1]))
+	uncompressedSize, err := strconv.Atoi(string(parts[1]))
 	if err != nil {
 		return nil, fmt.Errorf("manifest: malformed file size: %s", line)
 	}
 
-	originalHash, _ := hex.DecodeString(string(parts[2]))
+	uncompressedChecksum, _ := hex.DecodeString(string(parts[2]))
 
 	compressedSize, err := strconv.Atoi(string(parts[3]))
 	if err != nil {
 		return nil, fmt.Errorf("manifest: malformed compressed file size: %s", line)
 	}
 
-	compressedHash, _ := hex.DecodeString(string(parts[4]))
+	compressedChecksum, _ := hex.DecodeString(string(parts[4]))
 
 	checkHash, _ := hex.DecodeString(string(parts[5]))
 
@@ -151,14 +137,14 @@ func parseFile(line []byte) (*File, error) {
 		return nil, &MismatchedMd5HashError{string(line)}
 	}
 
-	return &File{
-		name: string(parts[0]),
+	return &Entry{
+		Name: string(parts[0]),
 
-		originalSize: originalSize,
-		originalHash: originalHash,
+		UncompressedSize:     int64(uncompressedSize),
+		UncompressedChecksum: uncompressedChecksum,
 
-		compressedSize: compressedSize,
-		compressedHash: compressedHash,
+		CompressedSize:     int64(compressedSize),
+		CompressedChecksum: compressedChecksum,
 	}, nil
 }
 
@@ -166,14 +152,13 @@ func parseFile(line []byte) (*File, error) {
 //
 // Manifest sections are not required to be in a specific order. The [version] section is allowed to come after the [files] section.
 func Read(r io.Reader) (*Manifest, error) {
-	sections := parseSections(r)
-
 	manifest := &Manifest{
-		Files:  []*File{},
-		byPath: map[string]*File{},
+		Sections: parseSections(r),
+		Files:    []*Entry{},
+		byPath:   map[string]*Entry{},
 	}
 
-	version, ok := sections["version"]
+	version, ok := manifest.Sections["version"]
 	if ok && len(version) > 0 {
 		vers, name, err := parseVersion(version[0])
 		if errors.Is(err, ErrMismatchedHash) {
@@ -186,21 +171,21 @@ func Read(r io.Reader) (*Manifest, error) {
 		}
 	}
 
-	files, ok := sections["files"]
+	files, ok := manifest.Sections["files"]
 	if !ok {
-		manifest.Files = []*File{}
-		manifest.byPath = map[string]*File{}
+		manifest.Files = []*Entry{}
+		manifest.byPath = map[string]*Entry{}
 		return manifest, nil
 	}
 
 	errs := []error{}
 	for _, line := range files {
-		file, err := parseFile(line)
+		entry, err := parseEntry(line)
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			manifest.Files = append(manifest.Files, file)
-			manifest.byPath[archive.ToArchivePath(file.name)] = file
+			manifest.Files = append(manifest.Files, entry)
+			manifest.byPath[archive.ToArchivePath(entry.Name)] = entry
 		}
 	}
 

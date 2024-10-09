@@ -37,7 +37,7 @@ func doManifest(args []string) {
 	}
 
 	fmt.Printf("Found %d files:\n", len(manifest.Files))
-	for _, file := range manifest.Files {
-		fmt.Print("\t", file, "\n")
+	for _, entry := range manifest.Files {
+		fmt.Print("\t", entry, "\n")
 	}
 }

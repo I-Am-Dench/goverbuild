@@ -72,13 +72,13 @@ func doCache(args []string) {
 			return true
 		}
 
-		entry, ok := manifestfile.GetFile(qc.Path())
+		entry, ok := manifestfile.GetEntry(qc.Path())
 		if !ok {
 			log.Printf("%s: entry is not tracked by manifest file", qc.Path())
 			return true
 		}
 
-		if entry.OriginalSize() != qc.Size() || !bytes.Equal(entry.OriginalHash(), qc.Hash()) {
+		if entry.UncompressedSize != qc.Size() || !bytes.Equal(entry.UncompressedChecksum, qc.Hash()) {
 			log.Printf("%s: manifest mismatch...not updating", qc.Path())
 		} else {
 			if err := cachefile.Store(qc.Path(), file); err != nil {

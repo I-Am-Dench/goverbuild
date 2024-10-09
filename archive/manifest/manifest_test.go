@@ -33,7 +33,7 @@ client/fmod_event.dll,307200,203956a75fe0d8ac6906793bdfe0d211,137264,83eafa3aa54
 client/fmodex.dll,843776,7d040207c78542104a8790ab695bc9c0,408777,b4f4dc4865302759d9ceed68679bb115,cc476e28a981ff764a8adce51efff461
 client/icudt42.dll,10941440,0c5bd1f7a69a176d6029a8c598a13261,4696736,53fd6c192550d5b0c3776c335d01f724,be71e551060d1503403d4a55443dd3cb`
 
-func testRead(expected *manifest.Manifest, expectedFiles []string, r io.Reader) error {
+func testRead(expected *manifest.Manifest, expectedEntries []string, r io.Reader) error {
 	actual, err := manifest.Read(r)
 	if err != nil {
 		return err
@@ -47,14 +47,14 @@ func testRead(expected *manifest.Manifest, expectedFiles []string, r io.Reader) 
 		return fmt.Errorf("manifest: expected name %s, but got %s", expected.Name, actual.Name)
 	}
 
-	if len(expectedFiles) != len(actual.Files) {
-		return fmt.Errorf("manifest: expected %d files, but got %d", len(expectedFiles), len(actual.Files))
+	if len(expectedEntries) != len(actual.Files) {
+		return fmt.Errorf("manifest: expected %d files, but got %d", len(expectedEntries), len(actual.Files))
 	}
 
 	errs := []error{}
-	for i, file := range actual.Files {
-		if file.Name() != expectedFiles[i] {
-			errs = append(errs, fmt.Errorf("manifest: expected %s, but got %s", expectedFiles[i], file.Name()))
+	for i, entry := range actual.Files {
+		if entry.Name != expectedEntries[i] {
+			errs = append(errs, fmt.Errorf("manifest: expected %s, but got %s", expectedEntries[i], entry.Name))
 		}
 	}
 
