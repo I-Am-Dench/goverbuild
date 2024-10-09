@@ -318,7 +318,7 @@ func TestQuickCheckBasic(t *testing.T) {
 
 	t.Log("-- test: all files match")
 	cachefile.ForEach(func(qc cache.QuickCheck) bool {
-		file, err := os.Open(filepath.Join(env.Dir, qc.Path()))
+		file, err := os.Open(filepath.Join(env.Dir, qc.SysPath()))
 		if err != nil {
 			t.Errorf("all files match: %v", err)
 		}
