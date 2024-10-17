@@ -53,7 +53,7 @@ func doCache(args []string) {
 	}
 
 	cachefile.ForEach(func(qc cache.QuickCheck) bool {
-		file, err := os.Open(filepath.Join(*root, qc.SysPath()))
+		file, err := os.Open(filepath.Join(*root, qc.Path()))
 		if err != nil {
 			log.Printf("%s: %v", qc.Path(), err)
 			return true

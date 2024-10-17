@@ -9,10 +9,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
-
-	"github.com/I-Am-Dench/goverbuild/archive"
 )
 
 var (
@@ -46,7 +45,7 @@ type Manifest struct {
 }
 
 func (manifest *Manifest) GetEntry(path string) (*Entry, bool) {
-	f, ok := manifest.byPath[archive.ToArchivePath(path)]
+	f, ok := manifest.byPath[filepath.ToSlash(path)]
 	return f, ok
 }
 
@@ -199,7 +198,7 @@ func parseEntry(line []byte) (*Entry, error) {
 	}
 
 	return &Entry{
-		Path: string(parts[0]),
+		Path: filepath.ToSlash(string(parts[0])),
 
 		UncompressedSize:     int64(uncompressedSize),
 		UncompressedChecksum: uncompressedChecksum,
@@ -246,7 +245,7 @@ func Read(r io.Reader) (*Manifest, error) {
 			errs = append(errs, err)
 		} else {
 			manifest.Files = append(manifest.Files, entry)
-			manifest.byPath[archive.ToArchivePath(entry.Path)] = entry
+			manifest.byPath[entry.Path] = entry
 		}
 	}
 

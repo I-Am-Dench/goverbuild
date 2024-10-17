@@ -8,13 +8,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/I-Am-Dench/goverbuild/archive"
 )
 
 var (
@@ -34,10 +33,6 @@ type quickCheck struct {
 
 func (qc *quickCheck) Path() string {
 	return qc.path
-}
-
-func (qc *quickCheck) SysPath() string {
-	return archive.ToSysPath(qc.path)
 }
 
 func (qc *quickCheck) LastModified() time.Time {
@@ -69,7 +64,6 @@ func (qc *quickCheck) Check(file *os.File) error {
 
 type QuickCheck interface {
 	Path() string
-	SysPath() string
 	LastModified() time.Time
 	Size() int64
 	Hash() []byte
@@ -135,7 +129,7 @@ func (cache *Cache) parseLine(line string) (*quickCheck, error) {
 	}
 
 	return &quickCheck{
-		path:         archive.ToArchivePath(parts[0]),
+		path:         filepath.FromSlash(parts[0]),
 		lastModified: modTime,
 		size:         size,
 		hash:         hash,
@@ -263,7 +257,7 @@ func (cache *Cache) store(qc *quickCheck) error {
 
 // Returns the QuickCheck value for the given path.
 func (cache *Cache) Get(path string) (QuickCheck, bool) {
-	v, ok := cache.sm.Load(archive.ToArchivePath(path))
+	v, ok := cache.sm.Load(filepath.FromSlash(path))
 	if !ok {
 		return nil, false
 	}
@@ -271,7 +265,7 @@ func (cache *Cache) Get(path string) (QuickCheck, bool) {
 }
 
 // Sets the QuickCheck of the provided file to the given path as its key. The path is
-// always passed through archive.ToArchivePath before being stored.
+// always passed through filepath.FromSlash before being stored.
 //
 // If the number of changes (# modifications + # additions) >= the configured flush threshold,
 // the cache's contents are flushed to underlying *os.File. The result of this flush is NOT
@@ -292,7 +286,7 @@ func (cache *Cache) Store(path string, file *os.File) error {
 	}
 
 	qc := &quickCheck{
-		path:         archive.ToArchivePath(path),
+		path:         filepath.FromSlash(path),
 		lastModified: stat.ModTime(),
 		size:         stat.Size(),
 		hash:         hash.Sum(nil),

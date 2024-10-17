@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/I-Am-Dench/goverbuild/archive"
 	"github.com/I-Am-Dench/goverbuild/archive/cache"
 )
 
@@ -60,7 +59,7 @@ func (env *Env) AddResFile(name ...string) (check, string, error) {
 	}
 
 	return check{
-		Path:    archive.ToArchivePath(path),
+		Path:    filepath.FromSlash(path),
 		ModTime: stat.ModTime(),
 		Size:    int64(written),
 		Hash:    hash.Sum(nil),
@@ -318,7 +317,7 @@ func TestQuickCheckBasic(t *testing.T) {
 
 	t.Log("-- test: all files match")
 	cachefile.ForEach(func(qc cache.QuickCheck) bool {
-		file, err := os.Open(filepath.Join(env.Dir, qc.SysPath()))
+		file, err := os.Open(filepath.Join(env.Dir, qc.Path()))
 		if err != nil {
 			t.Errorf("all files match: %v", err)
 		}
