@@ -13,7 +13,7 @@ import (
 	"sort"
 
 	"github.com/I-Am-Dench/goverbuild/archive"
-	"github.com/I-Am-Dench/goverbuild/compress/sid0"
+	"github.com/I-Am-Dench/goverbuild/compress/segmented"
 	"github.com/I-Am-Dench/goverbuild/internal"
 )
 
@@ -36,7 +36,7 @@ type Record struct {
 }
 
 // Returns an io.Reader and md5 hash writer for the record's data. If the record is compressed,
-// the underlying io.Reader is wrapped by an *sid0.DataReader.
+// the underlying io.Reader is wrapped by a *segmented.DataReader.
 //
 // The hash.Hash value contains the md5 chunksum for the uncompressed data, but only for
 // the data read out of the io.Reader.
@@ -58,7 +58,7 @@ type Record struct {
 func (record *Record) Section() (io.Reader, hash.Hash, error) {
 	reader := io.Reader(record.r)
 	if record.IsCompressed {
-		sd0, err := sid0.NewDataReader(reader, record.CompressedSize)
+		sd0, err := segmented.NewDataReader(reader, record.CompressedSize)
 		if err != nil {
 			return nil, nil, fmt.Errorf("pack: record: section: %w", err)
 		}

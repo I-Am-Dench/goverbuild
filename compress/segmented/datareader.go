@@ -1,4 +1,4 @@
-package sid0
+package segmented
 
 import (
 	"bytes"
