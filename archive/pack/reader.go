@@ -18,7 +18,7 @@ import (
 )
 
 type Record struct {
-	r *io.SectionReader
+	r io.ReaderAt
 
 	Crc      uint32
 	CrcLower int32
@@ -56,7 +56,12 @@ type Record struct {
 //
 //	fmt.Println(hash.Sum(nil)) // the resulting checksum
 func (record *Record) Section() (io.Reader, hash.Hash, error) {
-	reader := io.Reader(record.r)
+	size := record.OriginalSize
+	if record.IsCompressed {
+		size = record.CompressedSize
+	}
+	reader := io.Reader(io.NewSectionReader(record.r, int64(record.dataPointer), int64(size)))
+
 	if record.IsCompressed {
 		sd0, err := segmented.NewDataReader(reader, record.CompressedSize)
 		if err != nil {
@@ -113,7 +118,7 @@ func readHash(r io.ReadSeeker) ([]byte, error) {
 	return hash, nil
 }
 
-func readRecord(r io.ReadSeeker) (*Record, error) {
+func readRecord(r internal.ReadSeekerAt) (*Record, error) {
 	record := &Record{}
 
 	if err := binary.Read(r, order, &record.Crc); err != nil {
@@ -159,6 +164,8 @@ func readRecord(r io.ReadSeeker) (*Record, error) {
 
 	record.IsCompressed = boolData[0] != 0
 
+	record.r = r
+
 	return record, nil
 }
 
@@ -197,17 +204,17 @@ func readRecords(r internal.ReadSeekerAt, size uint32) ([]*Record, error) {
 		}
 	}
 
-	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		return nil, fmt.Errorf("pack: readRecords: %w", err)
-	}
+	// if _, err := r.Seek(0, io.SeekStart); err != nil {
+	// 	return nil, fmt.Errorf("pack: readRecords: %w", err)
+	// }
 
-	for _, record := range records {
-		size := record.OriginalSize
-		if record.IsCompressed {
-			size = record.CompressedSize
-		}
-		record.r = io.NewSectionReader(r, int64(record.dataPointer), int64(size))
-	}
+	// for _, record := range records {
+	// 	// size := record.OriginalSize
+	// 	// if record.IsCompressed {
+	// 	// 	size = record.CompressedSize
+	// 	// }
+	// 	// record.r = io.NewSectionReader(r, int64(record.dataPointer), int64(size))
+	// }
 
 	if len(errs) > 0 {
 		return records, errors.Join(errs...)
@@ -266,7 +273,7 @@ func Read(r io.Reader) (*Pack, error) {
 // closes the opened file before passing the error back to the caller. If no error is returned from Read, the file remains
 // opened and must be closed by the caller.
 func Open(path string) (*Pack, error) {
-	file, err := os.OpenFile(path, os.O_RDONLY, os.ModePerm)
+	file, err := os.OpenFile(path, os.O_RDONLY, 0755)
 	if err != nil {
 		return nil, fmt.Errorf("pack: open reader: %w", err)
 	}

@@ -45,6 +45,16 @@ func (extractor *Extractor) getPack(name string) (*pack.Pack, error) {
 	return pack, nil
 }
 
+func (extractor *Extractor) Close() error {
+	errs := []error{}
+	for _, pack := range extractor.packs {
+		if err := pack.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func (extractor *Extractor) log(format string, a ...any) {
 	if extractor.Verbose {
 		fmt.Printf("goverbuild: "+format, a...)
@@ -62,6 +72,10 @@ func (extractor *Extractor) logFatal(format string, a ...any) {
 }
 
 func (extractor *Extractor) Extract(path string) {
+	if filepath.Ext(path) == ".pk" {
+		return
+	}
+
 	file, ok := extractor.Catalog.Search(path)
 	if !ok {
 		extractor.log("extractor: %s: not cataloged\n", path)
@@ -89,6 +103,8 @@ func (extractor *Extractor) Extract(path string) {
 		extractor.log("extractor: %s: not packed\n", path)
 		return
 	}
+
+	// client/res/forkp/effects/celebration/celebrationSentinelSword/celebrationSentinelSword4.psb
 
 	outputPath := strings.ToLower(filepath.Join(extractor.Client, path))
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
@@ -155,6 +171,11 @@ func doExtract(args []string) {
 		Client:           *client,
 		RemoveMismatches: *removeMismatches,
 	}
+	defer func() {
+		if err := extractor.Close(); err != nil {
+			log.Print(err)
+		}
+	}()
 
 	if flagset.NArg() >= 1 {
 		extractor.Extract(flagset.Args()[0])
