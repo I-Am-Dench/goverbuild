@@ -129,7 +129,7 @@ func (cache *Cache) parseLine(line string) (*quickCheck, error) {
 	}
 
 	return &quickCheck{
-		path:         filepath.FromSlash(parts[0]),
+		path:         strings.ToLower(filepath.FromSlash(parts[0])),
 		lastModified: modTime,
 		size:         size,
 		hash:         hash,
@@ -257,7 +257,7 @@ func (cache *Cache) store(qc *quickCheck) error {
 
 // Returns the QuickCheck value for the given path.
 func (cache *Cache) Get(path string) (QuickCheck, bool) {
-	v, ok := cache.sm.Load(filepath.FromSlash(path))
+	v, ok := cache.sm.Load(strings.ToLower(filepath.FromSlash(path)))
 	if !ok {
 		return nil, false
 	}
@@ -286,7 +286,7 @@ func (cache *Cache) Store(path string, file *os.File) error {
 	}
 
 	qc := &quickCheck{
-		path:         filepath.FromSlash(path),
+		path:         strings.ToLower(filepath.FromSlash(path)),
 		lastModified: stat.ModTime(),
 		size:         stat.Size(),
 		hash:         hash.Sum(nil),
