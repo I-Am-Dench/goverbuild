@@ -24,15 +24,16 @@ type Record struct {
 	CrcLower int32
 	CrcUpper int32
 
-	OriginalSize uint32
-	OriginalHash []byte
+	archive.Info
+	IsCompressed bool
 
-	CompressedSize uint32
-	CompressedHash []byte
+	// OriginalSize uint32
+	// OriginalHash []byte
+
+	// CompressedSize uint32
+	// CompressedHash []byte
 
 	dataPointer uint32
-
-	IsCompressed bool
 }
 
 // Returns an io.Reader and md5 hash writer for the record's data. If the record is compressed,
@@ -56,7 +57,7 @@ type Record struct {
 //
 //	fmt.Println(hash.Sum(nil)) // the resulting checksum
 func (record *Record) Section() (io.Reader, hash.Hash, error) {
-	size := record.OriginalSize
+	size := record.UncompressedSize
 	if record.IsCompressed {
 		size = record.CompressedSize
 	}
@@ -133,7 +134,7 @@ func readRecord(r internal.ReadSeekerAt) (*Record, error) {
 		return nil, &RecordError{err, "crcUpper"}
 	}
 
-	if err := binary.Read(r, order, &record.OriginalSize); err != nil {
+	if err := binary.Read(r, order, &record.UncompressedSize); err != nil {
 		return nil, &RecordError{err, "originalSize"}
 	}
 
@@ -141,7 +142,7 @@ func readRecord(r internal.ReadSeekerAt) (*Record, error) {
 	if err != nil {
 		return nil, &RecordError{err, "originalHash"}
 	}
-	record.OriginalHash = originalHash
+	record.UncompressedChecksum = originalHash
 
 	if err := binary.Read(r, order, &record.CompressedSize); err != nil {
 		return nil, &RecordError{err, "compressedSize"}
@@ -151,7 +152,7 @@ func readRecord(r internal.ReadSeekerAt) (*Record, error) {
 	if err != nil {
 		return nil, &RecordError{err, "compressedHash"}
 	}
-	record.CompressedHash = compressedHash
+	record.CompressedChecksum = compressedHash
 
 	if err := binary.Read(r, order, &record.dataPointer); err != nil {
 		return nil, &RecordError{err, "dataPointer"}

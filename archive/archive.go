@@ -6,6 +6,14 @@ import (
 	"github.com/snksoft/crc"
 )
 
+type Info struct {
+	UncompressedSize     uint32
+	UncompressedChecksum []byte
+
+	CompressedSize     uint32
+	CompressedChecksum []byte
+}
+
 var (
 	Crc = crc.NewTable(&crc.Parameters{
 		Width:      32,

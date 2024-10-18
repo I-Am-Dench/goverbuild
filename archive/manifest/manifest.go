@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+
+	"github.com/I-Am-Dench/goverbuild/archive"
 )
 
 var (
@@ -22,12 +24,13 @@ type Sections = map[string][][]byte
 
 type Entry struct {
 	Path string
+	archive.Info
 
-	UncompressedSize     int64
-	UncompressedChecksum []byte
+	// UncompressedSize     int64
+	// UncompressedChecksum []byte
 
-	CompressedSize     int64
-	CompressedChecksum []byte
+	// CompressedSize     int64
+	// CompressedChecksum []byte
 }
 
 type Manifest struct {
@@ -199,12 +202,13 @@ func parseEntry(line []byte) (*Entry, error) {
 
 	return &Entry{
 		Path: filepath.ToSlash(string(parts[0])),
+		Info: archive.Info{
+			UncompressedSize:     uint32(uncompressedSize),
+			UncompressedChecksum: uncompressedChecksum,
 
-		UncompressedSize:     int64(uncompressedSize),
-		UncompressedChecksum: uncompressedChecksum,
-
-		CompressedSize:     int64(compressedSize),
-		CompressedChecksum: compressedChecksum,
+			CompressedSize:     uint32(compressedSize),
+			CompressedChecksum: compressedChecksum,
+		},
 	}, nil
 }
 

@@ -78,7 +78,7 @@ func doCache(args []string) {
 			return true
 		}
 
-		if entry.UncompressedSize != qc.Size() || !bytes.Equal(entry.UncompressedChecksum, qc.Hash()) {
+		if int64(entry.UncompressedSize) != qc.Size() || !bytes.Equal(entry.UncompressedChecksum, qc.Hash()) {
 			log.Printf("%s: manifest mismatch...not updating", qc.Path())
 		} else {
 			if err := cachefile.Store(qc.Path(), file); err != nil {

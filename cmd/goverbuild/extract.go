@@ -130,13 +130,13 @@ func (extractor *Extractor) Extract(path string) {
 		return
 	}
 
-	if h := hash.Sum(nil); !bytes.Equal(h, record.OriginalHash) {
+	if h := hash.Sum(nil); !bytes.Equal(h, record.UncompressedChecksum) {
 		if !extractor.RemoveMismatches {
-			extractor.logFatal("extractor: %s: hashes do not match: %x != %x", path, h, record.OriginalHash)
+			extractor.logFatal("extractor: %s: hashes do not match: %x != %x", path, h, record.UncompressedChecksum)
 		} else {
 			out.Close()
 			os.Remove(outputPath)
-			extractor.logFatal("extractor: %s: hashes do not match: %x != %x: removing %s", path, h, record.OriginalHash, outputPath)
+			extractor.logFatal("extractor: %s: hashes do not match: %x != %x: removing %s", path, h, record.UncompressedChecksum, outputPath)
 		}
 	}
 

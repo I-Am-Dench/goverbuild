@@ -26,7 +26,7 @@ func NewPackRecordTable() *PackRecordTable {
 }
 
 func (tab *PackRecordTable) Record(record *pack.Record) *PackRecordTable {
-	fmt.Fprintf(tab, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%t\n", record.Crc, record.CrcLower, record.CrcUpper, record.OriginalSize, record.OriginalHash, record.CompressedSize, record.CompressedHash, record.IsCompressed)
+	fmt.Fprintf(tab, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%t\n", record.Crc, record.CrcLower, record.CrcUpper, record.UncompressedSize, record.UncompressedChecksum, record.CompressedSize, record.CompressedChecksum, record.IsCompressed)
 	return tab
 }
 
@@ -204,8 +204,8 @@ func packExtract(args []string) {
 		log.Fatal(err)
 	}
 
-	if h := hash.Sum(nil); !bytes.Equal(h, record.OriginalHash) {
-		log.Printf("warning: md5 hashes do not match: %x != %x", h, record.OriginalHash)
+	if h := hash.Sum(nil); !bytes.Equal(h, record.UncompressedChecksum) {
+		log.Printf("warning: md5 hashes do not match: %x != %x", h, record.UncompressedChecksum)
 	}
 
 	fmt.Printf("extracted \"%s\" to \"%s\"\n", findPath, outputPath)
