@@ -40,7 +40,7 @@ Packages related to `.pk` (pack), `.pki` (catalog), and `.txt` (manifest) files.
 Packages related to `.sd0` and `.si0` files. Currently, ONLY `.sd0` reading is implemented. Both `.sd0` and `.si0` readers and writers are implemented within the `/segmented` package.
 
 **TODO:**
-- [ ] sd0 writer
+- [x] sd0 writer
 - [ ] si0 reader and writer
 - [ ] sd0 and si0 tests
 
