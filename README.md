@@ -7,7 +7,7 @@ GOverbuild is a Go library of implementations of common LEGO Universe data struc
 
 ## Installation
 
-You can use the following command after initializing your project's module:
+You can add GOverbuild to your project's module with:
 
 ```bash
 go get -u github.com/I-Am-Dench/goverbuild@latest
@@ -15,7 +15,7 @@ go get -u github.com/I-Am-Dench/goverbuild@latest
 
 ## Tools
 
-A small collection of analysis tools is included within the `goverbuild` program which can be installed with the following command:
+A small collection of analysis tools is included within the `goverbuild` program which can be installed with:
 
 ```bash
 go install github.com/I-Am-Dench/goverbuild/cmd/goverbuild@latest
