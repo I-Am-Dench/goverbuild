@@ -58,7 +58,6 @@ func (record *Record) Section() (io.Reader, hash.Hash, error) {
 	reader := io.Reader(io.NewSectionReader(record.r, int64(record.dataPointer), int64(size)))
 
 	if record.IsCompressed {
-		// sd0, err := segmented.NewDataReader(reader, record.CompressedSize)
 		sd0, err := segmented.NewDataReader(reader)
 		if err != nil {
 			return nil, nil, fmt.Errorf("pack: record: section: %w", err)
