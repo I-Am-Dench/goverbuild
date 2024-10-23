@@ -33,7 +33,7 @@ Display a manifest file's version and/or resources.
 Extracts **ALL** resources from a given manifest file and catalog file. This command is best used when extracting resources from a packed client. I would recommend anyone extracting a packed client to still use LCDR's [pkextractor](https://github.com/lcdr/utils) for those not familiar with the command line, but if you would like to use `goverbuild`'s extractor, I would recommend calling
 
 ```bash
-goverbuild extract -v -ie
+goverbuild extract -v
 ```
 
 in your packed client's installation directory. That is, the directory containing the `versions`, `patcher`, `installer`, and `client` directories.
