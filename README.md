@@ -30,7 +30,7 @@ More information can be found here: [`/cmd/goverbuild/README.md`](cmd/goverbuild
 Packages related to `.pk` (pack), `.pki` (catalog), and `.txt` (manifest) files.
 
 **TODO:**
-- [ ] pack writer
+- [x] pack writer
 - [ ] catalog writer
 - [x] manifest writer
 - [ ] pack, catalog, and manifest tests

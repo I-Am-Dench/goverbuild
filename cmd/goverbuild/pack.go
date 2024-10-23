@@ -21,12 +21,12 @@ type PackRecordTable struct {
 
 func NewPackRecordTable() *PackRecordTable {
 	tab := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tab, "crc\tcrc_lower\tcrc_upper\toriginal_size\toriginal_hash\tcompressed_size\tcompressed_hash\tis_compressed")
+	fmt.Fprintln(tab, "crc\tindex_lower\tindex_upper\toriginal_size\toriginal_hash\tcompressed_size\tcompressed_hash\tdata_pointer\tis_compressed")
 	return &PackRecordTable{tab}
 }
 
 func (tab *PackRecordTable) Record(record *pack.Record) *PackRecordTable {
-	fmt.Fprintf(tab, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%t\n", record.Crc, record.CrcLower, record.CrcUpper, record.UncompressedSize, record.UncompressedChecksum, record.CompressedSize, record.CompressedChecksum, record.IsCompressed)
+	fmt.Fprintf(tab, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%d\t%t\n", record.Crc, record.LowerIndex, record.UpperIndex, record.UncompressedSize, record.UncompressedChecksum, record.CompressedSize, record.CompressedChecksum, record.DataPointer(), record.IsCompressed)
 	return tab
 }
 
