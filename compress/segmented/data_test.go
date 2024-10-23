@@ -103,8 +103,8 @@ func test(t *testing.T, data []byte) {
 
 	t.Logf("data writer: compressed %d bytes", actual.Len())
 
-	if actual.Len() != int(writer.BytesWritten()) {
-		t.Errorf("data writer: writer compressed %d bytes but returned %d", actual.Len(), writer.BytesWritten())
+	if actual.Len() != int(writer.BytesCompressed()) {
+		t.Errorf("data writer: writer compressed %d bytes but returned %d", actual.Len(), writer.BytesCompressed())
 	}
 
 	if expected.Len() != actual.Len() {

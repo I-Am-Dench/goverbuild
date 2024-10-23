@@ -24,8 +24,8 @@ type DataWriter struct {
 
 	buf *bytes.Buffer
 
-	bytesLeft    int
-	bytesWritten int64
+	bytesLeft       int
+	bytesCompressed int64
 
 	wroteSignature bool
 }
@@ -64,7 +64,7 @@ func (writer *DataWriter) Write(p []byte) (n int, err error) {
 		if written, err := writer.baseWriter.Write(Signature); err != nil {
 			return 0, fmt.Errorf("sd0: writer: signature: %w", err)
 		} else {
-			writer.bytesWritten += int64(written)
+			writer.bytesCompressed += int64(written)
 		}
 	}
 
@@ -84,7 +84,7 @@ func (writer *DataWriter) Write(p []byte) (n int, err error) {
 		if written, err := writer.flush(); err != nil {
 			return n, err
 		} else {
-			writer.bytesWritten += int64(written)
+			writer.bytesCompressed += int64(written)
 		}
 	}
 
@@ -99,8 +99,8 @@ func (writer *DataWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (writer *DataWriter) BytesWritten() int64 {
-	return writer.bytesWritten
+func (writer *DataWriter) BytesCompressed() int64 {
+	return writer.bytesCompressed
 }
 
 func (writer *DataWriter) Close() error {
@@ -108,7 +108,7 @@ func (writer *DataWriter) Close() error {
 		if written, err := writer.flush(); err != nil {
 			return fmt.Errorf("sd0: close: %w", err)
 		} else {
-			writer.bytesWritten += int64(written)
+			writer.bytesCompressed += int64(written)
 		}
 	}
 	return nil
