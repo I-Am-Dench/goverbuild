@@ -82,7 +82,7 @@ func dump(expected, actual *bytes.Buffer) {
 	log.Println("dumped testdata")
 }
 
-func test(t *testing.T, data []byte) {
+func testWrite(t *testing.T, data []byte) {
 	t.Logf("data writer: testing %d uncompressed bytes", len(data))
 
 	expected := compress(data)
@@ -120,16 +120,57 @@ func test(t *testing.T, data []byte) {
 	}
 }
 
-func testRandomData(t *testing.T) {
-	test(t, createData())
-}
-
 func TestDataWriter(t *testing.T) {
 	t.Run("short", func(t *testing.T) {
-		test(t, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+		testWrite(t, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	})
 
 	for i := 0; i < 10; i++ {
-		t.Run("random_data", testRandomData)
+		t.Run("random_data", func(t *testing.T) {
+			testWrite(t, createData())
+		})
+	}
+}
+
+func testRead(t *testing.T, expected []byte) {
+	compressed := compress(expected)
+	t.Logf("data reader: testing %d compressed bytes", compressed.Len())
+
+	t.Logf("data reader: expecting %d uncompressed bytes", len(expected))
+
+	reader, err := segmented.NewDataReader(compressed)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	actual := &bytes.Buffer{}
+	if _, err := io.Copy(actual, reader); err != nil {
+		t.Fatalf("data reader: %v", err)
+	}
+
+	t.Logf("data reader: uncompressed %d bytes", actual.Len())
+
+	if len(expected) != actual.Len() {
+		t.Errorf("data reader: expected %d bytes but got %d", len(expected), actual.Len())
+		dump(bytes.NewBuffer(expected), actual)
+		return
+	}
+
+	if !bytes.Equal(expected, actual.Bytes()) {
+		t.Errorf("data reader: data does not match")
+		dump(bytes.NewBuffer(expected), actual)
+		return
+	}
+}
+
+func TestDataReader(t *testing.T) {
+	t.Run("short", func(t *testing.T) {
+		testRead(t, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccccccccc"))
+	})
+
+	for i := 0; i < 10; i++ {
+		t.Run("random_data", func(t *testing.T) {
+			testRead(t, createData())
+		})
 	}
 }
