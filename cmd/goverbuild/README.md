@@ -37,3 +37,12 @@ goverbuild extract -v
 ```
 
 in your packed client's installation directory. That is, the directory containing the `versions`, `patcher`, `installer`, and `client` directories.
+
+### `cache`
+
+Uses a provided manifest file and root directory to either generate or update a given cache file.
+
+### `segmented`
+
+- `compress`: Compresses a file to a segmented data file (.sd0)
+- `decompress`: Decompresses a segmented data file into a file
