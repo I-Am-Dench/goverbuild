@@ -82,7 +82,7 @@ func (extractor *Extractor) Extract(path string) {
 		return
 	}
 
-	packname, err := filepath.Rel(extractor.Rel, file.Name)
+	packname, err := filepath.Rel(extractor.Rel, file.PackName)
 	if err != nil {
 		extractor.logFatal("extractor: %s: %v", path, err)
 		return
@@ -154,7 +154,7 @@ func doExtract(args []string) {
 	removeMismatches := flagset.Bool("removemismatches", false, "Remove files with mismatched md5 hashes.")
 	flagset.Parse(args)
 
-	catalog, err := catalog.Open(*catalogPath)
+	catalog, err := catalog.ReadFile(*catalogPath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("catalog file does not exist: %s", *catalogPath)
 	}

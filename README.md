@@ -31,7 +31,7 @@ Packages related to `.pk` (pack), `.pki` (catalog), and `.txt` (manifest) files.
 
 **TODO:**
 - [x] pack writer
-- [ ] catalog writer
+- [x] catalog writer
 - [x] manifest writer
 - [ ] pack, catalog, and manifest tests
 
