@@ -6,11 +6,12 @@ import (
 )
 
 var Commands = CommandList{
-	"pack":     doPack,
-	"catalog":  doCatalog,
-	"manifest": doManifest,
-	"extract":  doExtract,
-	"cache":    doCache,
+	"pack":      doPack,
+	"catalog":   doCatalog,
+	"manifest":  doManifest,
+	"extract":   doExtract,
+	"cache":     doCache,
+	"segmented": doSegmented,
 }
 
 func main() {
