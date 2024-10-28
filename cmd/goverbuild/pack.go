@@ -140,9 +140,8 @@ func packSearch(args []string) {
 	}
 
 	for {
-		var find string
 		fmt.Print("Search (leave blank to exit): ")
-		fmt.Scanln(&find)
+		find := Scanln()
 
 		if len(strings.TrimSpace(find)) == 0 {
 			return

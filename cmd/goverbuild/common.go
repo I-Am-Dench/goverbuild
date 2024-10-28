@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"log"
+	"os"
 	"strings"
 )
 
@@ -45,4 +47,11 @@ func SkipLimitSlice[T any](skip, limit int, list []T) []T {
 	}
 
 	return list[skip:endIndex]
+}
+
+var scanReader = bufio.NewReader(os.Stdin)
+
+func Scanln() string {
+	s, _ := scanReader.ReadString('\n')
+	return s
 }
