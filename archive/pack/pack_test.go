@@ -350,3 +350,57 @@ func TestStore(t *testing.T) {
 	t.Run("append", testAppend(pack, env))
 	t.Run("save", testSave(file, pack, env))
 }
+
+func testTruncate(t *testing.T) {
+	const (
+		numFilesSize = 4
+		tailSize     = 8
+	)
+
+	var EmptyPackSize = len(pack.Signature) + numFilesSize + tailSize
+
+	file, err := os.OpenFile("testdata/pack.pk", os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+
+	if _, err := file.Write(createData()); err != nil {
+		t.Fatal(err)
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("filled pack with %d random bytes", stat.Size())
+
+	pack, err := pack.New(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := pack.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	stat, err = file.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if stat.Size() != int64(EmptyPackSize) {
+		t.Errorf("empty pack: expected %d bytes but got %d", EmptyPackSize, stat.Size())
+	}
+}
+
+func TestRead(t *testing.T) {
+	_, cleanup, err := setup()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup(t)
+
+	t.Run("trunate_empty", testTruncate)
+}

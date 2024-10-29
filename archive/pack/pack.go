@@ -321,6 +321,22 @@ func (pack *Pack) Flush() error {
 			return fmt.Errorf("pack: flush: %w", err)
 		}
 		pack.dirty = false
+
+		written, err := pack.f.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return fmt.Errorf("pack: flush: %w", err)
+		}
+
+		stat, err := pack.f.Stat()
+		if err != nil {
+			return fmt.Errorf("pack: flush: %w", err)
+		}
+
+		if written < stat.Size() {
+			if err := pack.f.Truncate(written); err != nil {
+				return fmt.Errorf("pack: flush: %w", err)
+			}
+		}
 	}
 	return nil
 }
