@@ -25,12 +25,6 @@ type Sections = map[string][][]byte
 type Entry struct {
 	Path string
 	archive.Info
-
-	// UncompressedSize     int64
-	// UncompressedChecksum []byte
-
-	// CompressedSize     int64
-	// CompressedChecksum []byte
 }
 
 type Manifest struct {
@@ -42,7 +36,7 @@ type Manifest struct {
 	// This includes custom section data and the raw, unparsed [version] and [files] data.
 	Sections map[string][][]byte
 
-	Files []*Entry
+	Entries []*Entry
 
 	byPath map[string]*Entry
 }
@@ -72,7 +66,7 @@ func (manifest *Manifest) WriteTo(w io.Writer) (int64, error) {
 		written += n
 	}
 
-	for _, entry := range manifest.Files {
+	for _, entry := range manifest.Entries {
 		buf := &bytes.Buffer{}
 		fmt.Fprintf(buf, "%s,%d,%x,%d,%x", entry.Path, entry.UncompressedSize, entry.UncompressedChecksum, entry.CompressedSize, entry.CompressedChecksum)
 
@@ -218,7 +212,7 @@ func parseEntry(line []byte) (*Entry, error) {
 func Read(r io.Reader) (*Manifest, error) {
 	manifest := &Manifest{
 		Sections: parseSections(r),
-		Files:    []*Entry{},
+		Entries:  []*Entry{},
 		byPath:   map[string]*Entry{},
 	}
 
@@ -237,7 +231,7 @@ func Read(r io.Reader) (*Manifest, error) {
 
 	files, ok := manifest.Sections["files"]
 	if !ok {
-		manifest.Files = []*Entry{}
+		manifest.Entries = []*Entry{}
 		manifest.byPath = map[string]*Entry{}
 		return manifest, nil
 	}
@@ -248,7 +242,7 @@ func Read(r io.Reader) (*Manifest, error) {
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			manifest.Files = append(manifest.Files, entry)
+			manifest.Entries = append(manifest.Entries, entry)
 			manifest.byPath[entry.Path] = entry
 		}
 	}
