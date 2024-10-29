@@ -1,6 +1,11 @@
 package archive
 
 import (
+	"bytes"
+	"crypto/md5"
+	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/snksoft/crc"
@@ -12,6 +17,32 @@ type Info struct {
 
 	CompressedSize     uint32
 	CompressedChecksum []byte
+}
+
+func (info Info) verify(file *os.File, expectedSize int64, expectedChecksum []byte) error {
+	stat, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	checksum := md5.New()
+	if _, err := io.Copy(checksum, file); err != nil {
+		return err
+	}
+
+	sum := checksum.Sum(nil)
+	if !(stat.Size() == expectedSize && bytes.Equal(sum, expectedChecksum)) {
+		return fmt.Errorf("verify: (expected: %d,%v) != (actual: %d,%v)", expectedSize, expectedChecksum, stat.Size(), sum)
+	}
+	return nil
+}
+
+func (info Info) VerifyUncompressed(file *os.File) error {
+	return info.verify(file, int64(info.UncompressedSize), info.UncompressedChecksum)
+}
+
+func (info Info) VerifyCompressed(file *os.File) error {
+	return info.verify(file, int64(info.CompressedSize), info.CompressedChecksum)
 }
 
 var (

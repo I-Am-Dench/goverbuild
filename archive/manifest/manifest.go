@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/I-Am-Dench/goverbuild/archive"
 )
@@ -42,7 +43,7 @@ type Manifest struct {
 }
 
 func (manifest *Manifest) GetEntry(path string) (*Entry, bool) {
-	f, ok := manifest.byPath[filepath.ToSlash(path)]
+	f, ok := manifest.byPath[strings.ToLower(filepath.ToSlash(path))]
 	return f, ok
 }
 
@@ -243,7 +244,7 @@ func Read(r io.Reader) (*Manifest, error) {
 			errs = append(errs, err)
 		} else {
 			manifest.Entries = append(manifest.Entries, entry)
-			manifest.byPath[entry.Path] = entry
+			manifest.byPath[strings.ToLower(entry.Path)] = entry
 		}
 	}
 

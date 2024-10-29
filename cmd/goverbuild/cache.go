@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -9,9 +8,78 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/I-Am-Dench/goverbuild/archive"
 	"github.com/I-Am-Dench/goverbuild/archive/cache"
 	"github.com/I-Am-Dench/goverbuild/archive/manifest"
 )
+
+func checkCache(root string, verbose bool) cache.RangeFunc {
+	return func(qc cache.QuickCheck) bool {
+		stat, err := os.Stat(filepath.Join(root, qc.Path()))
+		if err != nil {
+			log.Printf("%s: %v", qc.Path(), err)
+			return true
+		}
+
+		info := archive.Info{
+			UncompressedSize:     uint32(qc.Size()),
+			UncompressedChecksum: qc.Hash(),
+		}
+
+		if err := qc.Check(stat, info); err != nil {
+			log.Printf("%s: %v", qc.Path(), err)
+		} else if verbose {
+			fmt.Printf("goverbuild: %s: entry matches!\n", qc.Path())
+		}
+
+		return true
+	}
+}
+
+func checkCacheWithManifest(root string, verbose bool, cachefile *cache.Cache, manifestfile *manifest.Manifest) cache.RangeFunc {
+	return func(qc cache.QuickCheck) bool {
+		entry, ok := manifestfile.GetEntry(qc.Path())
+		if !ok {
+			log.Printf("%s: entry is not tracked by manifest file", qc.Path())
+			return true
+		}
+
+		stat, err := os.Stat(filepath.Join(root, qc.Path()))
+		if err != nil {
+			log.Printf("%s: %v", qc.Path(), err)
+			return true
+		}
+
+		err = qc.Check(stat, entry.Info)
+		if err == nil {
+			if verbose {
+				fmt.Printf("goverbuild: %s: entry matches!\n", qc.Path())
+			}
+			return true
+		}
+
+		log.Printf("%s: %v", qc.Path(), err)
+
+		file, err := os.Open(filepath.Join(root, qc.Path()))
+		if err != nil {
+			log.Printf("%s: %v", qc.Path(), err)
+			return true
+		}
+
+		if err := entry.VerifyUncompressed(file); err != nil {
+			log.Printf("%s: %v: manifest mismatch...not updating", qc.Path(), err)
+			return true
+		}
+
+		if err := cachefile.Store(qc.Path(), file); err != nil {
+			log.Printf("%s: %v", qc.Path(), err)
+		} else if verbose {
+			fmt.Printf("goverbuild: %s: updated quick check entry\n", qc.Path())
+		}
+
+		return true
+	}
+}
 
 func doCache(args []string) {
 	flagset := flag.NewFlagSet("cache", flag.ExitOnError)
@@ -52,42 +120,12 @@ func doCache(args []string) {
 		}
 	}
 
-	cachefile.ForEach(func(qc cache.QuickCheck) bool {
-		file, err := os.Open(filepath.Join(*root, qc.Path()))
-		if err != nil {
-			log.Printf("%s: %v", qc.Path(), err)
-			return true
-		}
+	var check cache.RangeFunc
+	if manifestfile == nil {
+		check = checkCache(*root, *verbose)
+	} else {
+		check = checkCacheWithManifest(*root, *verbose, cachefile, manifestfile)
+	}
 
-		err = qc.Check(file)
-		if err == nil {
-			if *verbose {
-				fmt.Printf("goverbuild: %s: entry matches!\n", qc.Path())
-			}
-			return true
-		}
-
-		log.Printf("%s: %v", qc.Path(), err)
-		if manifestfile == nil || !errors.Is(err, cache.ErrMismatchedQuickCheck) {
-			return true
-		}
-
-		entry, ok := manifestfile.GetEntry(qc.Path())
-		if !ok {
-			log.Printf("%s: entry is not tracked by manifest file", qc.Path())
-			return true
-		}
-
-		if int64(entry.UncompressedSize) != qc.Size() || !bytes.Equal(entry.UncompressedChecksum, qc.Hash()) {
-			log.Printf("%s: manifest mismatch...not updating", qc.Path())
-		} else {
-			if err := cachefile.Store(qc.Path(), file); err != nil {
-				log.Printf("%s: %v", qc.Path(), err)
-			} else if *verbose {
-				fmt.Printf("goverbuild: %s: updated quick check entry\n", qc.Path())
-			}
-		}
-
-		return true
-	})
+	cachefile.ForEach(check)
 }

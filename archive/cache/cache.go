@@ -2,6 +2,7 @@ package cache
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
@@ -14,11 +15,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/I-Am-Dench/goverbuild/archive"
 )
 
-var (
-	ErrMismatchedQuickCheck = errors.New("mismatched quick check entry")
-)
+// var (
+// 	ErrMismatchedQuickCheck = errors.New("mismatched quick check entry")
+// )
 
 func FormatQuickCheckTime(t time.Time) string {
 	return fmt.Sprintf("%d.%06d", t.Unix(), t.Nanosecond())
@@ -47,16 +50,13 @@ func (qc *quickCheck) Hash() []byte {
 	return qc.hash
 }
 
-func (qc *quickCheck) Check(file *os.File) error {
-	stat, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("check: %w", err)
+func (qc *quickCheck) Check(stat os.FileInfo, info archive.Info) error {
+	if !(stat.ModTime().Equal(qc.lastModified) && stat.Size() == qc.size) {
+		return fmt.Errorf("quickcheck: entry does not match disk: (expected: %s,%d) != (actual: %s,%d)", FormatQuickCheckTime(qc.lastModified), qc.size, FormatQuickCheckTime(stat.ModTime()), stat.Size())
 	}
 
-	expected := fmt.Sprintf("%s,%d", FormatQuickCheckTime(qc.lastModified), qc.size)
-	actual := fmt.Sprintf("%s,%d", FormatQuickCheckTime(stat.ModTime()), stat.Size())
-	if expected != actual {
-		return fmt.Errorf("%w: (expected: %s) != (actual: %s)", ErrMismatchedQuickCheck, expected, actual)
+	if !(int64(info.UncompressedSize) == qc.size && bytes.Equal(info.UncompressedChecksum, qc.hash)) {
+		return fmt.Errorf("quickcheck: entry does not match info: (expected: %d,%v) != (actual: %d,%v)", qc.size, qc.hash, info.UncompressedSize, info.UncompressedChecksum)
 	}
 
 	return nil
@@ -68,7 +68,7 @@ type QuickCheck interface {
 	Size() int64
 	Hash() []byte
 
-	Check(*os.File) error
+	Check(os.FileInfo, archive.Info) error
 }
 
 type RangeFunc = func(qc QuickCheck) bool

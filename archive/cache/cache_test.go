@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/I-Am-Dench/goverbuild/archive"
 	"github.com/I-Am-Dench/goverbuild/archive/cache"
 )
 
@@ -320,13 +321,23 @@ func TestQuickCheckBasic(t *testing.T) {
 		file, err := os.Open(filepath.Join(env.Dir, qc.Path()))
 		if err != nil {
 			t.Errorf("all files match: %v", err)
+			return true
+		}
+		defer file.Close()
+
+		stat, err := file.Stat()
+		if err != nil {
+			t.Errorf("all files match: %v", err)
+			return true
 		}
 
-		if err := qc.Check(file); err != nil {
+		// Hardcoding archive.Info as a temporary solution
+		if err := qc.Check(stat, archive.Info{
+			UncompressedSize:     uint32(qc.Size()),
+			UncompressedChecksum: qc.Hash(),
+		}); err != nil {
 			t.Errorf("all files match: %v", err)
 		}
-
-		file.Close()
 
 		return true
 	})
