@@ -33,7 +33,7 @@ Packages related to `.pk` (pack), `.pki` (catalog), and `.txt` (manifest) files.
 - [x] pack writer
 - [x] catalog writer
 - [x] manifest writer
-- [ ] pack, catalog, and manifest tests
+- [x] pack, catalog, and manifest tests
 
 ### `/compress`
 
