@@ -132,6 +132,7 @@ func (catalog *Catalog) WriteTo(w io.Writer) (n int64, err error) {
 	return
 }
 
+// Creates a new catalog from a map of pack names to a list of file names.
 func New(files map[string][]string) *Catalog {
 	records := []*Record{}
 	packNames := []string{}
@@ -231,6 +232,7 @@ func readRecords(r io.Reader, packNames []string) ([]*Record, error) {
 	return records, nil
 }
 
+// Creates a *Catalog from the contents of the given io.Reader.
 func ReadFrom(r io.Reader) (*Catalog, error) {
 	catalog := &Catalog{}
 	if err := binary.Read(r, order, &catalog.Version); err != nil {
@@ -257,6 +259,7 @@ func ReadFrom(r io.Reader) (*Catalog, error) {
 	return catalog, nil
 }
 
+// Creates a *Catalog out of the *os.File from the given path.
 func ReadFile(name string) (*Catalog, error) {
 	file, err := os.Open(name)
 	if err != nil {
@@ -267,6 +270,7 @@ func ReadFile(name string) (*Catalog, error) {
 	return ReadFrom(file)
 }
 
+// Writes the contents of the *Catalog to the file specified by path.
 func WriteFile(name string, catalog *Catalog) error {
 	file, err := os.OpenFile(name, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
 	if err != nil {

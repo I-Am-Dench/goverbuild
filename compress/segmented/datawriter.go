@@ -114,6 +114,7 @@ func (writer *DataWriter) Close() error {
 	return nil
 }
 
+// Creates a new sd0 compressor.
 func NewDataWriter(w io.Writer) *DataWriter {
 	buf := &bytes.Buffer{}
 	zw, _ := zlib.NewWriterLevel(buf, DefaultCompressionLevel)

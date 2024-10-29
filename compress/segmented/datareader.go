@@ -52,6 +52,8 @@ func (reader *DataReader) Read(p []byte) (n int, err error) {
 	return
 }
 
+// Creates a new sd0 decompressor. NewDataReader returns a nil
+// *DataReader if the function fails to verify the signature.
 func NewDataReader(r io.Reader) (*DataReader, error) {
 	sig := [5]byte{}
 	if _, err := r.Read(sig[:]); err != nil {

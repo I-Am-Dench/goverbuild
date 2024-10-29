@@ -130,6 +130,9 @@ type Pack struct {
 	revision          uint32
 }
 
+// Returns the *Pack's records.
+//
+// *Pack.Records never returns a nil slice.
 func (pack *Pack) Records() []*Record {
 	if pack.records == nil {
 		_, err := pack.ReadRecords()
@@ -216,6 +219,11 @@ func (pack *Pack) updateRecord(records []*Record, index int, info archive.Info, 
 	return nil
 }
 
+// Adds or updates a record within the *Pack.
+//
+// One or more calls to *Pack.Store should be followed by
+// a call to either *Pack.Flush or *Pack.Close to update
+// the contents of the underlying *os.File.
 func (pack *Pack) Store(path string, info archive.Info, compressed bool, r io.Reader) (err error) {
 	defer pack.updateRecordsTree()
 
@@ -311,6 +319,11 @@ func (pack *Pack) flush(w io.Writer, recordsPointer uint32) (n int64, err error)
 	return
 }
 
+// Writes the *Pack's records and tailer data to the end
+// of the underlying *os.File.
+//
+// If the written data is less than the total size of the *os.File
+// the file is truncated to the number of written bytes.
 func (pack *Pack) Flush() error {
 	if pack.dirty {
 		if _, err := pack.f.Seek(int64(pack.numRecordsPointer), io.SeekStart); err != nil {
@@ -454,6 +467,9 @@ func (pack *Pack) readRecord(r io.Reader) (*Record, error) {
 	return record, nil
 }
 
+// Reads the record data from the underlying *os.File
+// and returns the resulting slice. The *Pack's internal
+// records are updated with this result.
 func (pack *Pack) ReadRecords() ([]*Record, error) {
 	if pack.dirty {
 		return pack.records, nil
@@ -515,6 +531,9 @@ func (pack *Pack) parseHeader(r io.ReadSeeker) (err error) {
 	return nil
 }
 
+// Flushes the contents of the *Pack and then closes
+// the underlying *os.File ONLY if the *Pack was created
+// through a call to Open.
 func (pack *Pack) Close() (err error) {
 	defer func() {
 		if pack.closer {
@@ -543,6 +562,12 @@ func (pack *Pack) init() error {
 	return nil
 }
 
+// Creates an empty *Pack with the provided *os.File.
+//
+// The underlying contents of the file are NOT cleared unless
+// *Pack.Flush has been called BEFORE a call to *Pack.ReadRecords.
+// The contents of the *os.File are initialized with a signature
+// ONLY if the length of the file is shorter than the signature.
 func New(file *os.File) (*Pack, error) {
 	pack := &Pack{
 		f: file,
@@ -560,6 +585,14 @@ func New(file *os.File) (*Pack, error) {
 	return pack, nil
 }
 
+// Creates a *Pack with the *os.File specified by path.
+//
+// The existing contents of the *os.File are loaded into
+// the *Pack. If there is an error when creating the *Pack
+// of loading the *Pack's contents, the file is closed.
+//
+// Calling *Pack.Close on a *Pack created through a call
+// from Open causes the underlying file to be closed.
 func Open(path string) (*Pack, error) {
 	file, err := os.OpenFile(path, os.O_RDWR, 0755)
 	if err != nil {
