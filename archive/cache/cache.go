@@ -230,10 +230,10 @@ func (cache *Cache) Flush() error {
 	return nil
 }
 
-func (cache *Cache) shouldFlush() bool {
+func (cache *Cache) shouldFlush(threshold int) bool {
 	cache.addedMux.RLock()
 	defer cache.addedMux.RUnlock()
-	return uint32(len(cache.added))+cache.modified.Load() >= uint32(cache.flushThreshold)
+	return uint32(len(cache.added))+cache.modified.Load() >= uint32(threshold)
 }
 
 func (cache *Cache) store(qc *quickCheck) error {
@@ -248,7 +248,7 @@ func (cache *Cache) store(qc *quickCheck) error {
 		cache.addedMux.Unlock()
 	}
 
-	if cache.shouldFlush() && cache.canFlush.Swap(false) {
+	if cache.shouldFlush(cache.flushThreshold) && cache.canFlush.Swap(false) {
 		return cache.varFlush()
 	}
 
@@ -329,7 +329,7 @@ func (cache *Cache) Read(r io.Reader) error {
 // Flushes the cache's contents, if necessary, to the underlying *os.File,
 // and then closes the file.
 func (cache *Cache) Close() error {
-	if cache.shouldFlush() {
+	if cache.shouldFlush(1) {
 		if err := cache.Flush(); err != nil {
 			return err
 		}
