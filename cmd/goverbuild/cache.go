@@ -23,7 +23,7 @@ func checkCache(root string, verbose bool) cache.RangeFunc {
 
 		info := archive.Info{
 			UncompressedSize:     uint32(qc.Size()),
-			UncompressedChecksum: qc.Hash(),
+			UncompressedChecksum: qc.Checksum(),
 		}
 
 		if err := qc.Check(stat, info); err != nil {
@@ -71,7 +71,7 @@ func checkCacheWithManifest(root string, verbose bool, cachefile *cache.Cache, m
 			return true
 		}
 
-		if err := cachefile.Store(qc.Path(), file); err != nil {
+		if err := cachefile.Store(qc.Path(), stat, entry.Info); err != nil {
 			log.Printf("%s: %v", qc.Path(), err)
 		} else if verbose {
 			fmt.Printf("goverbuild: %s: updated quick check entry\n", qc.Path())

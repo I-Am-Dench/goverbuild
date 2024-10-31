@@ -1,16 +1,13 @@
 package cache_test
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/md5"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -20,570 +17,650 @@ import (
 	"github.com/I-Am-Dench/goverbuild/archive/cache"
 )
 
-const (
-	NumFiles = 32
-)
-
-type Env struct {
-	Dir       string
-	CachePath string
-	ResFiles  []string
+type Entry struct {
+	Name     string
+	Size     int64
+	ModTime  time.Time
+	Checksum []byte
 }
 
-func (env *Env) AddResFile(name ...string) (check, string, error) {
-	resPath := fmt.Sprintf("file%02d.txt", len(env.ResFiles))
-	if len(name) > 0 {
-		resPath = name[0]
-	}
+type TestCache map[string]Entry
 
-	path := filepath.Join("res", resPath)
-
-	file, err := os.OpenFile(filepath.Join(env.Dir, path), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
-	if err != nil {
-		return check{}, "", fmt.Errorf("add file: %w", err)
-	}
-	defer file.Close()
-
-	env.ResFiles = append(env.ResFiles, path)
-
-	hash := md5.New()
-	w := io.MultiWriter(file, hash)
-
-	written, err := w.Write(genData())
-	if err != nil {
-		return check{}, "", fmt.Errorf("add file: %w", err)
-	}
-
-	stat, err := file.Stat()
-	if err != nil {
-		return check{}, "", fmt.Errorf("add file: %w", err)
-	}
-
-	return check{
-		Path:    filepath.FromSlash(path),
-		ModTime: stat.ModTime(),
-		Size:    int64(written),
-		Hash:    hash.Sum(nil),
-	}, resPath, nil
+type File struct {
+	Name     string
+	Checksum []byte
 }
 
-func (env *Env) ModifyResFile(cachefile *cache.Cache, name string) error {
-	file, err := env.OpenResFile(name)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	if _, err := file.Write(genData()); err != nil {
-		return err
-	}
-
-	if err := cachefile.Store(filepath.Join("res", name), file); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (env *Env) OpenResFile(name string) (*os.File, error) {
-	return os.OpenFile(filepath.Join(env.Dir, "res", name), os.O_RDWR, 0755)
-}
-
-func (env *Env) StoreResFile(cachefile *cache.Cache, name ...string) error {
-	quickcheck, resPath, err := env.AddResFile(name...)
-	if err != nil {
-		return err
-	}
-
-	file, err := env.OpenResFile(resPath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	return cachefile.Store(quickcheck.Path, file)
-}
-
-func (env *Env) CheckResFile(cachefile *cache.Cache, name string) error {
-	file, err := env.OpenResFile(name)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	path := filepath.Join("res", name)
-
-	actual, ok := cachefile.Get(path)
-	if !ok {
-		return fmt.Errorf("%s does not exist", path)
-	}
-
-	expected, err := Check(file)
-	if err != nil {
-		return err
-	}
-
-	errs := []error{}
-	if expected.Size != actual.Size() {
-		errs = append(errs, fmt.Errorf("expected size %d but got %d", expected.Size, actual.Size()))
-	}
-
-	if !bytes.Equal(expected.Hash, actual.Hash()) {
-		errs = append(errs, fmt.Errorf("expected hash %x but got %x", expected.Hash, actual.Hash()))
-	}
-
-	return errors.Join(errs...)
-}
-
-func (env *Env) Test(cachefile *cache.Cache) error {
-	expectedData := &bytes.Buffer{}
-	cachefile.ForEach(func(qc cache.QuickCheck) bool {
-		fmt.Fprintf(expectedData, "%s,%d.%06d,%d,%x\n", qc.Path(), qc.LastModified().Unix(), qc.LastModified().Nanosecond(), qc.Size(), qc.Hash())
-		return true
-	})
-
-	actualData := &bytes.Buffer{}
-	if _, err := cachefile.WriteTo(actualData); err != nil {
-		return err
-	}
-
-	expectedLines := strings.Split(expectedData.String(), "\n")
-	slices.Sort(expectedLines)
-
-	actualLines := strings.Split(actualData.String(), "\n")
-	slices.Sort(actualLines)
-
-	expected := strings.Join(expectedLines, "")
-	actual := strings.Join(actualLines, "")
-
-	if !bytes.Equal([]byte(expected), []byte(actual)) {
-		return fmt.Errorf("got different cachefile data:\n===EXPECTED===\n%s\n===ACTUAL===\n%s", expected, actual)
-	}
-
-	return nil
-}
-
-func (env *Env) TestFlushed(cachefile *cache.Cache) error {
-	file, err := os.Open(env.CachePath)
-	if err != nil {
-		return err
-	}
-
-	expectedLines := 0
-	cachefile.ForEach(func(cache.QuickCheck) bool {
-		expectedLines++
-		return true
-	})
-
-	actualLines := 0
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if len(strings.TrimSpace(scanner.Text())) > 0 {
-			actualLines++
-		}
-	}
-	file.Close()
-
-	if expectedLines != actualLines {
-		return fmt.Errorf("got different num cachefile lines: expected %d but got %d", expectedLines, actualLines)
-	}
-
-	return env.Test(cachefile)
-}
-
-func (env *Env) CompareLines(expected []string) error {
-	data, err := os.ReadFile(env.CachePath)
-	if err != nil {
-		return err
-	}
-
-	actual := strings.Split(strings.TrimSpace(string(data)), "\n")
-	sort.Strings(actual)
-
-	if len(expected) != len(actual) {
-		return fmt.Errorf("expected %d lines but got %d", len(expected), len(actual))
-	}
-
-	errs := []error{}
-	for i, line := range actual {
-		expectedLine := strings.TrimSpace(expected[i])
-		actualLine := strings.TrimSpace(line)
-
-		if expectedLine != actualLine {
-			errs = append(errs, fmt.Errorf("expected %s but got %s", expectedLine, actualLine))
-		}
-	}
-
-	return errors.Join(errs...)
-}
-
-func (env *Env) CleanUp() error {
-	return os.RemoveAll(env.Dir)
-}
-
-type check struct {
-	Path    string
-	ModTime time.Time
-	Size    int64
-	Hash    []byte
-}
-
-func (check *check) WriteTo(w io.Writer) (int64, error) {
-	n, err := fmt.Fprintf(w, "%s,%d.%06d,%d,%x\n", check.Path, check.ModTime.Unix(), check.ModTime.Nanosecond(), check.Size, check.Hash)
-	return int64(n), err
-}
-
-func Check(file *os.File) (check, error) {
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return check{}, err
-	}
-
-	hash := md5.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return check{}, err
-	}
-
-	stat, err := file.Stat()
-	if err != nil {
-		return check{}, err
-	}
-
-	return check{
-		ModTime: stat.ModTime(),
-		Size:    stat.Size(),
-		Hash:    hash.Sum(nil),
-	}, nil
-}
-
-func genData() []byte {
-	data := make([]byte, 1024)
+func createData() []byte {
+	num := rand.Intn(128) + 128
+	data := make([]byte, num)
 	for i := range data {
 		data[i] = byte(rand.Int())
 	}
 	return data
 }
 
-func setup(dir string) (*Env, func(*testing.T), error) {
-	env := &Env{
-		Dir:       dir,
-		CachePath: filepath.Join(dir, "quickcheck.txt"),
-		ResFiles:  []string{},
+func createFile(dir, name string) (File, error) {
+	file, err := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	if err != nil {
+		return File{}, err
+	}
+	defer file.Close()
+
+	data := createData()
+
+	checksum := md5.New()
+	checksum.Write(data)
+
+	if _, err := file.Write(data); err != nil {
+		return File{}, err
+	}
+
+	return File{
+		Name:     name,
+		Checksum: checksum.Sum(nil),
+	}, nil
+}
+
+type Files []File
+
+func (files *Files) Add(dir, name string) error {
+	file, err := createFile(dir, name)
+	if err != nil {
+		return err
+	}
+
+	*files = append(*files, file)
+	return nil
+}
+
+func (files Files) Update(dir string, index int) error {
+	name := files[index].Name
+	file, err := createFile(dir, name)
+	if err != nil {
+		return err
+	}
+	files[index] = file
+	return nil
+}
+
+func createFiles(dir string, n int) (Files, error) {
+	files := Files{}
+	for i := 0; i < n; i++ {
+		if err := files.Add(dir, fmt.Sprintf("res/file%02d", i)); err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+type Env struct {
+	Dir       string
+	CachePath string
+
+	Files     Files
+	CacheFile *cache.Cache
+}
+
+func (env *Env) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(filepath.Join(env.Dir, name))
+}
+
+func setup(numFiles int, threshold ...int) (*Env, func(t *testing.T), error) {
+	thresh := 0
+	if len(threshold) > 0 {
+		thresh = threshold[0]
+	}
+
+	dir, err := os.MkdirTemp(".", "cache_*.temp")
+	if err != nil {
+		return nil, nil, fmt.Errorf("setup: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(dir, "res"), 0755); err != nil {
+		return nil, nil, fmt.Errorf("setup: %w", err)
+	}
+
+	files, err := createFiles(dir, numFiles)
+	if err != nil {
+		return nil, nil, fmt.Errorf("setup: %w", err)
+	}
+
+	cachePath := filepath.Join(dir, "quickcheck.txt")
+	cachefile, err := cache.Open(cachePath, thresh)
+	if err != nil {
+		return nil, nil, fmt.Errorf("setup: %w", err)
 	}
 
 	cleanup := func(t *testing.T) {
 		if os.Getenv("KEEP_TESTDATA") != "1" {
-			if err := env.CleanUp(); err != nil {
-				t.Logf("cleanup: %v", err)
+			if err := os.RemoveAll(dir); err != nil {
+				t.Log(err)
 			}
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Join(env.Dir, "res"), 0755); err != nil {
-		return nil, cleanup, err
-	}
+	return &Env{
+		Dir:       dir,
+		CachePath: cachePath,
 
-	cacheFile, err := os.OpenFile(env.CachePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
-	if err != nil {
-		return nil, cleanup, err
-	}
-	defer cacheFile.Close()
-
-	for i := 0; i < NumFiles; i++ {
-		check, _, err := env.AddResFile()
-		if err != nil {
-			return nil, cleanup, err
-		}
-
-		if _, err := check.WriteTo(cacheFile); err != nil {
-			return nil, cleanup, err
-		}
-	}
-
-	return env, cleanup, nil
+		Files:     files,
+		CacheFile: cachefile,
+	}, cleanup, nil
 }
 
-func TestQuickCheckBasic(t *testing.T) {
-	env, cleanup, err := setup("testdata")
-	defer cleanup(t)
+func generateCache(env *Env, files Files) (TestCache, error) {
+	c := TestCache{}
+	for _, file := range files {
+		stat, err := env.Stat(file.Name)
+		if err != nil {
+			return nil, err
+		}
 
+		c[strings.ToLower(filepath.FromSlash(file.Name))] = Entry{
+			Name:     file.Name,
+			ModTime:  cache.RoundTime(stat.ModTime()),
+			Size:     stat.Size(),
+			Checksum: file.Checksum,
+		}
+	}
+	return c, nil
+}
+
+func generateCacheLines(env *Env, files Files) ([]string, error) {
+	c, err := generateCache(env, files)
 	if err != nil {
-		t.Fatalf("quick check: setup: %v", err)
+		return nil, err
 	}
 
-	cachefile, err := cache.Open(env.CachePath)
-	if err != nil {
-		t.Fatalf("quick check: %v", err)
+	lines := []string{}
+	for _, entry := range c {
+		lines = append(lines, fmt.Sprintf("%s,%s,%d,%x", filepath.FromSlash(entry.Name), cache.FormatTime(entry.ModTime), entry.Size, entry.Checksum))
 	}
-	defer cachefile.Close()
+	return lines, nil
+}
 
-	t.Log("-- test: all files match")
+func cacheLen(cachefile *cache.Cache) int {
+	l := 0
 	cachefile.ForEach(func(qc cache.QuickCheck) bool {
-		file, err := os.Open(filepath.Join(env.Dir, qc.Path()))
-		if err != nil {
-			t.Errorf("all files match: %v", err)
+		l++
+		return true
+	})
+	return l
+}
+
+func checkCache(t *testing.T, cachefile *cache.Cache, expected TestCache) {
+	if length := cacheLen(cachefile); len(expected) != length {
+		t.Fatalf("expected %d entries but got %d", len(expected), length)
+	}
+
+	cachefile.ForEach(func(qc cache.QuickCheck) bool {
+		entry, ok := expected[strings.ToLower(qc.Path())]
+		if !ok {
+			t.Errorf("%s: unexpected entry", qc.Path())
 			return true
 		}
-		defer file.Close()
 
-		stat, err := file.Stat()
-		if err != nil {
-			t.Errorf("all files match: %v", err)
-			return true
+		if !entry.ModTime.Equal(qc.ModTime()) {
+			t.Errorf("%s: expected mod time (%d.%d) but got (%d.%d)", entry.Name, entry.ModTime.Unix(), entry.ModTime.Nanosecond(), qc.ModTime().Unix(), qc.ModTime().Nanosecond())
 		}
 
-		// Hardcoding archive.Info as a temporary solution
-		if err := qc.Check(stat, archive.Info{
-			UncompressedSize:     uint32(qc.Size()),
-			UncompressedChecksum: qc.Hash(),
-		}); err != nil {
-			t.Errorf("all files match: %v", err)
+		if entry.Size != qc.Size() {
+			t.Errorf("%s: expected size %d but got %d", entry.Name, entry.Size, qc.Size())
+		}
+
+		if !bytes.Equal(entry.Checksum, qc.Checksum()) {
+			t.Errorf("%s: expected %x but got %x", entry.Name, entry.Checksum, qc.Checksum())
 		}
 
 		return true
 	})
+}
 
-	t.Log("-- test: add files")
-	if err := errors.Join(
-		env.StoreResFile(cachefile, "added.txt"),
-		env.StoreResFile(cachefile, "to_be_modified.txt"),
-	); err != nil {
-		t.Fatalf("add files: %v", err)
-	}
+func testBasicStore(n int) func(t *testing.T) {
+	return func(t *testing.T) {
+		env, cleanup, err := setup(n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := env.CacheFile.Close(); err != nil {
+				t.Log(err)
+			}
+			cleanup(t)
+		}()
 
-	if err := env.Test(cachefile); err != nil {
-		t.Errorf("add files: %v", err)
-	}
+		for _, file := range env.Files {
+			stat, err := env.Stat(file.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	t.Log("-- test: modify file (no changes)")
-	file, err := env.OpenResFile("to_be_modified.txt")
-	if err != nil {
-		t.Fatalf("modify file (no change): %v", err)
-	}
+			if err := env.CacheFile.Store(file.Name, stat, archive.Info{
+				UncompressedChecksum: file.Checksum,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
 
-	if err := cachefile.Store("res/to_be_modified.txt", file); err != nil {
-		file.Close()
-		t.Fatalf("modify file (no changes): %v", err)
-	}
-	file.Close()
+		expected, err := generateCache(env, env.Files)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	if err := env.Test(cachefile); err != nil {
-		t.Errorf("modify file (no changes): %v", err)
-	}
-
-	t.Log("-- test: modify file (with changes)")
-	file, err = env.OpenResFile("to_be_modified.txt")
-	if err != nil {
-		t.Fatalf("modify file (with changes): %v", err)
-	}
-
-	if _, err := file.Write(genData()); err != nil {
-		file.Close()
-		t.Fatalf("modify file (with changes): %v", err)
-	}
-
-	if err := cachefile.Store("res/to_be_modified.txt", file); err != nil {
-		file.Close()
-		t.Fatalf("modify file (with changes): %v", err)
-	}
-	file.Close()
-
-	if err := env.CheckResFile(cachefile, "to_be_modified.txt"); err != nil {
-		t.Errorf("modify file (with changes): %v", err)
-	}
-
-	if err := env.Test(cachefile); err != nil {
-		t.Errorf("modify file (with changes): %v", err)
-	}
-
-	t.Log("-- test: hard flush")
-	if err := cachefile.Flush(); err != nil {
-		t.Fatalf("hard flush: %v", err)
-	}
-
-	if err := env.TestFlushed(cachefile); err != nil {
-		t.Errorf("hard flush: %v", err)
+		checkCache(t, env.CacheFile, expected)
 	}
 }
 
-func sortedLines(cachefile *cache.Cache) []string {
-	buf := &bytes.Buffer{}
-	cachefile.WriteTo(buf)
+func testStoreUpdates(numFiles, numUpdates int) func(t *testing.T) {
+	return func(t *testing.T) {
+		env, cleanup, err := setup(numFiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := env.CacheFile.Close(); err != nil {
+				t.Log(err)
+			}
+			cleanup(t)
+		}()
 
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) == 1 && len(lines[0]) == 0 {
-		return []string{}
+		for _, file := range env.Files {
+			stat, err := env.Stat(file.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := env.CacheFile.Store(file.Name, stat, archive.Info{
+				UncompressedChecksum: file.Checksum,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		for i := 0; i < numUpdates; i++ {
+			index := rand.Intn(len(env.Files))
+			if err := env.Files.Update(env.Dir, index); err != nil {
+				t.Fatal(err)
+			}
+
+			file := env.Files[index]
+
+			stat, err := env.Stat(file.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := env.CacheFile.Store(file.Name, stat, archive.Info{
+				UncompressedChecksum: file.Checksum,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		expected, err := generateCache(env, env.Files)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		checkCache(t, env.CacheFile, expected)
+	}
+}
+
+func TestStore(t *testing.T) {
+	for i := 1; i <= 12; i++ {
+		t.Run(fmt.Sprintf("store_few_%d", i), testBasicStore(i))
 	}
 
-	sort.Strings(lines)
+	for i := 0; i < 10; i++ {
+		n := rand.Intn(32) + 24
+		t.Run("store_many", testBasicStore(n))
+	}
 
+	for i := 0; i < 5; i++ {
+		numFiles := rand.Intn(8) + 1
+		numUpdates := rand.Intn(12)
+		t.Run("update", testStoreUpdates(numFiles, numUpdates))
+	}
+}
+
+func getLines(buf *bytes.Buffer) []string {
+	lines := []string{}
+	for _, line := range bytes.Split(buf.Bytes(), []byte("\n")) {
+		s := strings.TrimSpace(string(line))
+		if len(s) > 0 {
+			lines = append(lines, strings.ToLower(s))
+		}
+	}
 	return lines
 }
 
-func TestQuickCheckFlush(t *testing.T) {
-	env, cleanup, err := setup("testdata")
-	defer cleanup(t)
+func compareLines(t *testing.T, expected, actual []string) {
 
-	if err != nil {
-		t.Fatalf("quick check: setup: %v", err)
+	if len(expected) != len(actual) {
+		t.Errorf("expected %d lines but got %d", len(expected), len(actual))
+		return
 	}
+	sort.Strings(expected)
+	sort.Strings(actual)
 
-	cachefile, err := cache.Open(env.CachePath, 10)
-	if err != nil {
-		t.Fatalf("quick check: setup: %v", err)
-	}
-	defer cachefile.Close()
-
-	expectedLines := sortedLines(cachefile)
-
-	t.Log("-- test: add 1")
-	if err := env.StoreResFile(cachefile); err != nil {
-		t.Fatalf("add 1: %v", err)
-	}
-
-	if err := env.CompareLines(expectedLines); err != nil {
-		t.Errorf("add 1: %v", err)
-	}
-
-	t.Log("-- test: add 5")
-	if err := errors.Join(
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-	); err != nil {
-		t.Fatalf("add 5: %v", err)
-	}
-
-	if err := env.CompareLines(expectedLines); err != nil {
-		t.Errorf("add 5: %v", err)
-	}
-
-	t.Log("-- test: add 4 (causes flush)")
-	if err := errors.Join(
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-	); err != nil {
-		t.Fatalf("add 4 (causes flush): %v", err)
-	}
-
-	if err := env.TestFlushed(cachefile); err != nil {
-		t.Errorf("add 4 (causes flush): %v", err)
-	}
-
-	expectedLines = sortedLines(cachefile)
-
-	t.Log("-- test: add 9")
-	if err := errors.Join(
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-	); err != nil {
-		t.Fatalf("add 9: %v", err)
-	}
-
-	if err := env.CompareLines(expectedLines); err != nil {
-		t.Errorf("add 9: %v", err)
-	}
-
-	t.Log("-- test: add 6 (causes flush)")
-	if err := errors.Join(
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile),
-		env.StoreResFile(cachefile, "modify_me_1.txt"),
-		env.StoreResFile(cachefile, "modify_me_2.txt"),
-		env.StoreResFile(cachefile),
-	); err != nil {
-		t.Fatalf("add 6 (causes flush): %v", err)
-	}
-
-	expectedLines = sortedLines(cachefile)
-	expectedLines = expectedLines[:len(expectedLines)-5]
-
-	if err := env.CompareLines(expectedLines); err != nil {
-		t.Errorf("add 6 (causes flush): %v", err)
-	}
-
-	t.Log("-- test: hard flush")
-	if err := cachefile.Flush(); err != nil {
-		t.Errorf("hard flush: %v", err)
-	}
-
-	if err := env.TestFlushed(cachefile); err != nil {
-		t.Errorf("hard flush: %v", err)
-	}
-
-	expectedLines = sortedLines(cachefile)
-
-	t.Log("-- test: modify files (hard flush)")
-	if err := errors.Join(
-		env.ModifyResFile(cachefile, "modify_me_1.txt"),
-		env.ModifyResFile(cachefile, "modify_me_2.txt"),
-	); err != nil {
-		t.Fatalf("modify files: %v", err)
-	}
-
-	if err := env.CompareLines(expectedLines); err != nil {
-		t.Errorf("modify files: %v", err)
-	}
-
-	if err := cachefile.Flush(); err != nil {
-		t.Errorf("modify files: %v", err)
-	}
-
-	if err := env.TestFlushed(cachefile); err != nil {
-		t.Errorf("modify files: %v", err)
+	for i, a := range expected {
+		if a != actual[i] {
+			t.Errorf("expected:\n%v\n\nactual:\n%v", expected, actual)
+			return
+		}
 	}
 }
 
-func TestQuickCheckRead(t *testing.T) {
-	if err := os.MkdirAll("testdata", 0755); err != nil {
-		t.Fatalf("quick check: %v", err)
-	}
-	defer func() {
-		if err := os.RemoveAll("testdata"); err != nil {
-			t.Log(err)
-		}
-	}()
-
-	data := `data\1,100.000001,0,aaaaaaaa
-data\2,200.000020,1,bbbbbbbb
-data\3,300.000300,2,cccccccc
-data\4,400.004000,3,dddddddd
-data\5,500.050000,4,eeeeeeee
-`
-
-	file, err := os.OpenFile("testdata/quickcheck.txt", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+func checkLines(t *testing.T, env *Env) {
+	expectedLines, err := generateCacheLines(env, env.Files)
 	if err != nil {
-		t.Fatalf("quick check: %v", err)
+		t.Fatal(err)
 	}
 
-	cachefile := cache.New(file)
-	defer cachefile.Close()
+	buf := &bytes.Buffer{}
+	env.CacheFile.WriteTo(buf)
 
-	if err := cachefile.Read(bytes.NewBuffer([]byte(data))); err != nil {
-		t.Fatalf("read: %v", err)
+	compareLines(t, expectedLines, getLines(buf))
+}
+
+func testWrite(numFiles int) func(t *testing.T) {
+	return func(t *testing.T) {
+		env, cleanup, err := setup(numFiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := env.CacheFile.Close(); err != nil {
+				t.Log(err)
+			}
+			cleanup(t)
+		}()
+
+		for _, file := range env.Files {
+			stat, err := env.Stat(file.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := env.CacheFile.Store(file.Name, stat, archive.Info{
+				UncompressedChecksum: file.Checksum,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		checkLines(t, env)
+	}
+}
+
+func testWriteUpdates(numFiles, numUpdates int) func(t *testing.T) {
+	return func(t *testing.T) {
+		env, cleanup, err := setup(numFiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := env.CacheFile.Close(); err != nil {
+				t.Log(err)
+			}
+			cleanup(t)
+		}()
+
+		for _, file := range env.Files {
+			stat, err := env.Stat(file.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := env.CacheFile.Store(file.Name, stat, archive.Info{
+				UncompressedChecksum: file.Checksum,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		for i := 0; i < numUpdates; i++ {
+			index := rand.Intn(len(env.Files))
+			if err := env.Files.Update(env.Dir, index); err != nil {
+				t.Fatal(err)
+			}
+
+			file := env.Files[index]
+
+			stat, err := env.Stat(file.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := env.CacheFile.Store(file.Name, stat, archive.Info{
+				UncompressedChecksum: file.Checksum,
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			checkLines(t, env)
+		}
+	}
+}
+
+func TestWrite(t *testing.T) {
+	for i := 1; i <= 1; i++ {
+		t.Run(fmt.Sprintf("write_lines_%d", i), testWrite(i))
 	}
 
-	expectedLines := strings.Split(strings.TrimSpace(data), "\n")
-	actualLines := sortedLines(cachefile)
+	for i := 0; i < 10; i++ {
+		numFiles := rand.Intn(8) + 1
+		numUpdates := rand.Intn(12)
+		t.Run("write_updates", testWriteUpdates(numFiles, numUpdates))
+	}
+}
 
-	if len(expectedLines) != len(actualLines) {
-		t.Fatalf("read: expected %d lines but got %d", len(expectedLines), len(actualLines))
+func readLines(env *Env) ([]string, error) {
+	file, err := os.Open(env.CachePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
 	}
 
-	for i, line := range actualLines {
-		if line != strings.TrimSpace(expectedLines[i]) {
-			t.Errorf("read: expected %s but got %s", line, expectedLines[i])
+	return getLines(bytes.NewBuffer(data)), nil
+}
+
+func testFlush(numFiles, threshold int) func(t *testing.T) {
+	return func(t *testing.T) {
+		env, cleanup, err := setup(numFiles, threshold)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := env.CacheFile.Close(); err != nil {
+				t.Log(err)
+			}
+			cleanup(t)
+		}()
+
+		expectedFiles := Files{}
+		toFlush := Files{}
+
+		for _, file := range env.Files {
+			toFlush = append(toFlush, file)
+			if len(toFlush) >= threshold {
+				expectedFiles = append(expectedFiles, toFlush...)
+				toFlush = toFlush[:0]
+			}
+
+			stat, err := env.Stat(file.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := env.CacheFile.Store(file.Name, stat, archive.Info{
+				UncompressedChecksum: file.Checksum,
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			expectedLines, err := generateCacheLines(env, expectedFiles)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			actualLines, err := readLines(env)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			compareLines(t, expectedLines, actualLines)
+		}
+	}
+}
+
+func TestFlush(t *testing.T) {
+	t.Run("flush_5_1", testFlush(5, 1))
+	t.Run("flush_1_10", testFlush(1, 10))
+	t.Run("flush_5_10", testFlush(5, 10))
+	t.Run("flush_10_10", testFlush(10, 10))
+	t.Run("flush_20_10", testFlush(20, 10))
+
+	t.Run("close_flush", func(t *testing.T) {
+		env, cleanup, err := setup(20, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup(t)
+		defer env.CacheFile.Close()
+
+		for _, file := range env.Files[:5] {
+			stat, err := env.Stat(file.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := env.CacheFile.Store(file.Name, stat, archive.Info{
+				UncompressedChecksum: file.Checksum,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		expectedLines, err := generateCacheLines(env, Files{})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		actualLines, err := readLines(env)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		compareLines(t, expectedLines, actualLines)
+
+		for _, file := range env.Files[5:] {
+			stat, err := env.Stat(file.Name)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := env.CacheFile.Store(file.Name, stat, archive.Info{
+				UncompressedChecksum: file.Checksum,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if err := env.CacheFile.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		expectedLines, err = generateCacheLines(env, env.Files)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		actualLines, err = readLines(env)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		compareLines(t, expectedLines, actualLines)
+	})
+}
+
+func testRead(numFiles int) func(t *testing.T) {
+	return func(t *testing.T) {
+		env, cleanup, err := setup(numFiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer cleanup(t)
+		defer func() {
+			env.CacheFile.Close()
+		}()
+
+		if err := env.CacheFile.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		lines, err := generateCacheLines(env, env.Files)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		file, err := os.OpenFile(env.CachePath, os.O_TRUNC|os.O_WRONLY, 0755)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, line := range lines {
+			if _, err := file.Write([]byte(line + "\n")); err != nil {
+				file.Close()
+				t.Fatal(err)
+			}
+		}
+		file.Close()
+
+		env.CacheFile, err = cache.Open(env.CachePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectedCache, err := generateCache(env, env.Files)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		checkCache(t, env.CacheFile, expectedCache)
+	}
+}
+
+func TestRead(t *testing.T) {
+	for i := 0; i < 5; i++ {
+		t.Run("read", testRead(10))
+		time.Sleep(time.Duration(rand.Intn(1000000)) * time.Nanosecond) // only to skew mod time
+	}
+}
+
+func TestRoundNanoseconds(t *testing.T) {
+	type TestCase struct {
+		Value    int
+		Expected int64
+	}
+
+	for _, test := range []TestCase{
+		{5, 0},
+		{21641400, 21641},
+		{354553500, 354554},
+		{599431500, 599432},
+		{630876100, 630876},
+		{22151900, 22152},
+	} {
+		if actual := cache.RoundNanoseconds(test.Value); test.Expected != actual {
+			t.Errorf("%d: expected %06d but got %06d", test.Value, test.Expected, actual)
 		}
 	}
 }

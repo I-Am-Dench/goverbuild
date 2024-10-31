@@ -3,7 +3,6 @@ package cache
 import (
 	"bufio"
 	"bytes"
-	"crypto/md5"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -19,14 +18,6 @@ import (
 	"github.com/I-Am-Dench/goverbuild/archive"
 )
 
-// var (
-// 	ErrMismatchedQuickCheck = errors.New("mismatched quick check entry")
-// )
-
-func FormatQuickCheckTime(t time.Time) string {
-	return fmt.Sprintf("%d.%06d", t.Unix(), t.Nanosecond())
-}
-
 type quickCheck struct {
 	path         string
 	lastModified time.Time
@@ -38,7 +29,7 @@ func (qc *quickCheck) Path() string {
 	return qc.path
 }
 
-func (qc *quickCheck) LastModified() time.Time {
+func (qc *quickCheck) ModTime() time.Time {
 	return qc.lastModified
 }
 
@@ -46,17 +37,17 @@ func (qc *quickCheck) Size() int64 {
 	return qc.size
 }
 
-func (qc *quickCheck) Hash() []byte {
+func (qc *quickCheck) Checksum() []byte {
 	return qc.hash
 }
 
 func (qc *quickCheck) Check(stat os.FileInfo, info archive.Info) error {
 	if !(stat.ModTime().Equal(qc.lastModified) && stat.Size() == qc.size) {
-		return fmt.Errorf("quickcheck: entry does not match disk: (expected: %s,%d) != (actual: %s,%d)", FormatQuickCheckTime(qc.lastModified), qc.size, FormatQuickCheckTime(stat.ModTime()), stat.Size())
+		return fmt.Errorf("quickcheck: entry does not match disk: (expected: %s,%d) != (actual: %s,%d)", FormatTime(qc.lastModified), qc.size, FormatTime(stat.ModTime()), stat.Size())
 	}
 
 	if !(int64(info.UncompressedSize) == qc.size && bytes.Equal(info.UncompressedChecksum, qc.hash)) {
-		return fmt.Errorf("quickcheck: entry does not match info: (expected: %d,%v) != (actual: %d,%v)", qc.size, qc.hash, info.UncompressedSize, info.UncompressedChecksum)
+		return fmt.Errorf("quickcheck: entry does not match info: (expected: %d,%x) != (actual: %d,%x)", qc.size, qc.hash, info.UncompressedSize, info.UncompressedChecksum)
 	}
 
 	return nil
@@ -64,9 +55,9 @@ func (qc *quickCheck) Check(stat os.FileInfo, info archive.Info) error {
 
 type QuickCheck interface {
 	Path() string
-	LastModified() time.Time
+	ModTime() time.Time
 	Size() int64
-	Hash() []byte
+	Checksum() []byte
 
 	Check(os.FileInfo, archive.Info) error
 }
@@ -103,6 +94,7 @@ func (cache *Cache) parseModTime(s string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("parse mod time: %w", err)
 	}
+	nanoseconds *= microToNano
 
 	return time.Unix(seconds, nanoseconds), nil
 }
@@ -147,7 +139,7 @@ func (cache *Cache) WriteTo(w io.Writer) (n int64, err error) {
 	written := int64(0)
 	cache.ForEach(func(qc QuickCheck) bool {
 		var n int
-		n, err = fmt.Fprintf(w, "%s,%d.%06d,%d,%x\n", qc.Path(), qc.LastModified().Unix(), qc.LastModified().Nanosecond(), qc.Size(), qc.Hash())
+		n, err = fmt.Fprintf(w, "%s,%s,%d,%x\n", qc.Path(), FormatTime(qc.ModTime()), qc.Size(), qc.Checksum())
 		written += int64(n)
 		return err == nil
 	})
@@ -185,7 +177,7 @@ func (cache *Cache) flushAll() error {
 
 func (cache *Cache) flushAdded() error {
 	for _, qc := range cache.added {
-		if _, err := fmt.Fprintf(cache.f, "%s,%d.%06d,%d,%x\n", qc.Path(), qc.LastModified().Unix(), qc.LastModified().Nanosecond(), qc.Size(), qc.Hash()); err != nil {
+		if _, err := fmt.Fprintf(cache.f, "%s,%s,%d,%x\n", qc.Path(), FormatTime(qc.ModTime()), qc.Size(), qc.Checksum()); err != nil {
 			return err
 		}
 	}
@@ -270,26 +262,12 @@ func (cache *Cache) Get(path string) (QuickCheck, bool) {
 // If the number of changes (# modifications + # additions) >= the configured flush threshold,
 // the cache's contents are flushed to underlying *os.File. The result of this flush is NOT
 // guaranteed to be equivalent to calling Flush.
-func (cache *Cache) Store(path string, file *os.File) error {
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("cache: add: %w", err)
-	}
-
-	hash := md5.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return fmt.Errorf("cache: add: %w", err)
-	}
-
-	stat, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("cache: add: %w", err)
-	}
-
+func (cache *Cache) Store(path string, stat os.FileInfo, info archive.Info) error {
 	qc := &quickCheck{
 		path:         strings.ToLower(filepath.FromSlash(path)),
-		lastModified: stat.ModTime(),
+		lastModified: RoundTime(stat.ModTime()),
 		size:         stat.Size(),
-		hash:         hash.Sum(nil),
+		hash:         info.UncompressedChecksum,
 	}
 
 	if err := cache.store(qc); err != nil {
