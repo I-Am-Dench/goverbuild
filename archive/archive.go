@@ -32,7 +32,7 @@ func (info Info) verify(file *os.File, expectedSize int64, expectedChecksum []by
 
 	sum := checksum.Sum(nil)
 	if !(stat.Size() == expectedSize && bytes.Equal(sum, expectedChecksum)) {
-		return fmt.Errorf("verify: (expected: %d,%v) != (actual: %d,%v)", expectedSize, expectedChecksum, stat.Size(), sum)
+		return fmt.Errorf("verify: (expected: %d,%x) != (actual: %d,%x)", expectedSize, expectedChecksum, stat.Size(), sum)
 	}
 	return nil
 }

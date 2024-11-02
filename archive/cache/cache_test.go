@@ -646,21 +646,27 @@ func TestRead(t *testing.T) {
 }
 
 func TestRoundNanoseconds(t *testing.T) {
+	type Time struct {
+		Seconds, Nano int64
+	}
+
 	type TestCase struct {
-		Value    int
+		Time     Time
 		Expected int64
 	}
 
 	for _, test := range []TestCase{
-		{5, 0},
-		{21641400, 21641},
-		{354553500, 354554},
-		{599431500, 599432},
-		{630876100, 630876},
-		{22151900, 22152},
+		{Time{0, 5}, 0},
+		{Time{1729218809, 315336400}, 315337000},
+		{Time{1729218809, 330893400}, 330894000},
+		{Time{1729218819, 196368500}, 196369000},
+		{Time{1729218819, 870770400}, 870771000},
+		{Time{1729218819, 897075500}, 897075000},
+		{Time{1729219363, 510861500}, 510861000},
 	} {
-		if actual := cache.RoundNanoseconds(test.Value); test.Expected != actual {
-			t.Errorf("%d: expected %06d but got %06d", test.Value, test.Expected, actual)
+		actual := cache.RoundTime(time.Unix(test.Time.Seconds, test.Time.Nano))
+		if test.Time.Seconds != actual.Unix() || test.Expected != int64(actual.Nanosecond()) {
+			t.Errorf("%d.%d: expected %d.%06d but got %d.%06d", test.Time.Seconds, test.Time.Nano, test.Time.Seconds, test.Expected, actual.Unix(), actual.Nanosecond())
 		}
 	}
 }

@@ -42,7 +42,7 @@ func (qc *quickCheck) Checksum() []byte {
 }
 
 func (qc *quickCheck) Check(stat os.FileInfo, info archive.Info) error {
-	if !(stat.ModTime().Equal(qc.lastModified) && stat.Size() == qc.size) {
+	if !(RoundTime(stat.ModTime()).Equal(qc.lastModified) && stat.Size() == qc.size) {
 		return fmt.Errorf("quickcheck: entry does not match disk: (expected: %s,%d) != (actual: %s,%d)", FormatTime(qc.lastModified), qc.size, FormatTime(stat.ModTime()), stat.Size())
 	}
 

@@ -13,9 +13,33 @@ import (
 	"github.com/I-Am-Dench/goverbuild/archive/manifest"
 )
 
-func checkCache(root string, verbose bool) cache.RangeFunc {
-	return func(qc cache.QuickCheck) bool {
-		stat, err := os.Stat(filepath.Join(root, qc.Path()))
+func cacheCheck(args []string) {
+	flagset := flag.NewFlagSet("cache:check", flag.ExitOnError)
+	verbose := flagset.Bool("v", false, "Verbose mode.")
+	root := flagset.String("root", ".", "Root directory for quick check resources.")
+	flagset.Parse(args)
+
+	cachePath := "versions/quickcheck.txt"
+	if flagset.NArg() > 0 {
+		cachePath = flagset.Args()[0]
+	}
+
+	cachefile, err := cache.Open(cachePath, 128)
+	if errors.Is(err, os.ErrNotExist) {
+		log.Fatalf("cache file does not exist: %s", cachePath)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() {
+		if err := cachefile.Close(); err != nil {
+			log.Println(err)
+		}
+	}()
+
+	cachefile.ForEach(func(qc cache.QuickCheck) bool {
+		stat, err := os.Stat(filepath.Join(*root, qc.Path()))
 		if err != nil {
 			log.Printf("%s: %v", qc.Path(), err)
 			return true
@@ -28,75 +52,51 @@ func checkCache(root string, verbose bool) cache.RangeFunc {
 
 		if err := qc.Check(stat, info); err != nil {
 			log.Printf("%s: %v", qc.Path(), err)
-		} else if verbose {
+		} else if *verbose {
 			fmt.Printf("goverbuild: %s: entry matches!\n", qc.Path())
 		}
 
 		return true
-	}
+	})
 }
 
-func checkCacheWithManifest(root string, verbose bool, cachefile *cache.Cache, manifestfile *manifest.Manifest) cache.RangeFunc {
-	return func(qc cache.QuickCheck) bool {
-		entry, ok := manifestfile.GetEntry(qc.Path())
-		if !ok {
-			log.Printf("%s: entry is not tracked by manifest file", qc.Path())
-			return true
-		}
-
-		stat, err := os.Stat(filepath.Join(root, qc.Path()))
-		if err != nil {
-			log.Printf("%s: %v", qc.Path(), err)
-			return true
-		}
-
-		err = qc.Check(stat, entry.Info)
-		if err == nil {
-			if verbose {
-				fmt.Printf("goverbuild: %s: entry matches!\n", qc.Path())
-			}
-			return true
-		}
-
-		log.Printf("%s: %v", qc.Path(), err)
-
-		file, err := os.Open(filepath.Join(root, qc.Path()))
-		if err != nil {
-			log.Printf("%s: %v", qc.Path(), err)
-			return true
-		}
-
-		if err := entry.VerifyUncompressed(file); err != nil {
-			log.Printf("%s: %v: manifest mismatch...not updating", qc.Path(), err)
-			return true
-		}
-
-		if err := cachefile.Store(qc.Path(), stat, entry.Info); err != nil {
-			log.Printf("%s: %v", qc.Path(), err)
-		} else if verbose {
-			fmt.Printf("goverbuild: %s: updated quick check entry\n", qc.Path())
-		}
-
-		return true
+func verifyEntry(path string, entry *manifest.Entry) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
 	}
+	defer file.Close()
+
+	if err := entry.VerifyUncompressed(file); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func doCache(args []string) {
-	flagset := flag.NewFlagSet("cache", flag.ExitOnError)
+func cacheUpdate(args []string) {
+	flagset := flag.NewFlagSet("cache:update", flag.ExitOnError)
 	verbose := flagset.Bool("v", false, "Verbose mode.")
-	update := flagset.Bool("update", false, "Update cache on mismatches.")
-	manifestPath := flagset.String("manifest", "versions/trunk.txt", "Path to the manifest file to update the cache with.")
 	root := flagset.String("root", ".", "Root directory for quick check resources.")
 	flagset.Parse(args)
 
-	path := "versions/quickcheck.txt"
+	cachePath := "versions/quickcheck.txt"
 	if flagset.NArg() > 0 {
-		path = flagset.Args()[0]
+		cachePath = flagset.Args()[0]
 	}
 
-	cachefile, err := cache.Open(path)
+	manifestPath := "versions/trunk.txt"
+	if flagset.NArg() > 1 {
+		manifestPath = flagset.Args()[1]
+	}
+
+	cachefile, err := cache.Open(cachePath, 128)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", path)
+		log.Fatalf("cache file does not exist: %s", cachePath)
+	}
+
+	if err != nil {
+		log.Fatal(err)
 	}
 	defer func() {
 		if err := cachefile.Close(); err != nil {
@@ -104,28 +104,63 @@ func doCache(args []string) {
 		}
 	}()
 
-	if err != nil {
-		log.Fatal(err)
+	manifestfile, err := manifest.Open(manifestPath)
+	if errors.Is(err, os.ErrNotExist) {
+		log.Fatalf("manifest file does not exist: %s", manifestPath)
 	}
 
-	var manifestfile *manifest.Manifest
-	if *update {
-		manifestfile, err = manifest.Open(*manifestPath)
+	if err != nil {
+		log.Println(err)
+	}
+
+	for _, entry := range manifestfile.Entries {
+		stat, err := os.Stat(filepath.Join(*root, entry.Path))
 		if errors.Is(err, os.ErrNotExist) {
-			log.Fatalf("manifest file does not exist: %s", *manifestPath)
+			continue
 		}
 
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("%s: %v", entry.Path, err)
+			continue
+		}
+
+		qc, ok := cachefile.Get(entry.Path)
+		if ok {
+			if err := qc.Check(stat, entry.Info); err == nil {
+				if *verbose {
+					fmt.Printf("goverbuild: %s: entry matches!\n", entry.Path)
+				}
+				continue
+			}
+		}
+
+		if err := verifyEntry(filepath.Join(*root, entry.Path), entry); err != nil {
+			log.Printf("%s: %v", entry.Path, err)
+			continue
+		}
+
+		if err := cachefile.Store(entry.Path, stat, entry.Info); err != nil {
+			log.Printf("%s: %v", entry.Path, err)
+		} else if *verbose {
+			fmt.Printf("goverbuild: %s: added!\n", entry.Path)
 		}
 	}
+}
 
-	var check cache.RangeFunc
-	if manifestfile == nil {
-		check = checkCache(*root, *verbose)
-	} else {
-		check = checkCacheWithManifest(*root, *verbose, cachefile, manifestfile)
+var CacheCommands = CommandList{
+	"check":  cacheCheck,
+	"update": cacheUpdate,
+}
+
+func doCache(args []string) {
+	if len(args) < 1 {
+		CacheCommands.Usage()
 	}
 
-	cachefile.ForEach(check)
+	command, ok := CacheCommands[args[0]]
+	if !ok {
+		CacheCommands.Usage()
+	}
+
+	command(args[1:])
 }
