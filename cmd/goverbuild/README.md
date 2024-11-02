@@ -40,7 +40,8 @@ in your packed client's installation directory. That is, the directory containin
 
 ### `cache`
 
-Uses a provided manifest file and root directory to either generate or update a given cache file.
+- `check`: Checks the contents of an existing cache file for a root directory.
+- `update`: Generates or updates a cache file using a provided manifest file and root directory.
 
 ### `segmented`
 
