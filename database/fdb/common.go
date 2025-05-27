@@ -79,6 +79,34 @@ func ReadNullTerminatedString(r io.Reader) (string, error) {
 	}
 }
 
+func WriteNullTerminatedString(s string, w io.Writer) (n int, err error) {
+	written, err := w.Write([]byte(s))
+	if err != nil {
+		return 0, fmt.Errorf("write null terminated string: %v", err)
+	}
+	n += written
+
+	if _, err := w.Write([]byte{0}); err != nil {
+		return 0, fmt.Errorf("write null terminated string: %v", err)
+	}
+	n += 1
+
+	return n, nil
+}
+
+func bitCeil(n int) int {
+	if n == 0 {
+		return 0
+	}
+
+	c := 1
+	for c < n {
+		c <<= 1
+	}
+
+	return c
+}
+
 // THE CODE BELOW HAS BEEN TRANSLATE FROM THE FOLLOWING RESOURCES:
 // - Original implementation: https://www.azillionmonkeys.com/qed/hash.html
 // - Xiphoseer's implementation: https://docs.rs/sfhash/latest/src/sfhash/lib.rs.html

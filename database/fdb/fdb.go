@@ -14,14 +14,10 @@ type Column struct {
 }
 
 type Table struct {
-	Name string
+	Name    string
+	Columns []*Column
 
-	columns   []*Column
 	hashTable *HashTable
-}
-
-func (t *Table) Columns() []*Column {
-	return t.columns
 }
 
 func (t *Table) HashTable() *HashTable {

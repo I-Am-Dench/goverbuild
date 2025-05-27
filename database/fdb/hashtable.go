@@ -23,21 +23,29 @@ type Bucket struct {
 	next     uint32
 	finished bool
 
-	row *Row
+	row Row
 	err error
 }
 
-func (b *Bucket) readRow(r io.ReadSeeker) (row *Row, nextOffset uint32, err error) {
+func (b *Bucket) readRow(r io.ReadSeeker) (row Row, nextOffset uint32, err error) {
+	if b.next == noData {
+		return nil, noData, nil
+	}
+
+	if _, err := r.Seek(int64(b.next), io.SeekStart); err != nil {
+		return nil, 0, err
+	}
+
 	var rowDataOffset uint32
 	if err = errors.Join(
 		binary.Read(r, order, &rowDataOffset),
 		binary.Read(r, order, &nextOffset),
 	); err != nil {
-		return
+		return nil, 0, err
 	}
 
 	if _, err = r.Seek(int64(rowDataOffset), io.SeekStart); err != nil {
-		return
+		return nil, 0, err
 	}
 
 	var (
@@ -48,25 +56,27 @@ func (b *Bucket) readRow(r io.ReadSeeker) (row *Row, nextOffset uint32, err erro
 		binary.Read(r, order, &numColumns),
 		binary.Read(r, order, &dataArrayOffset),
 	); err != nil {
-		return
+		return nil, 0, err
 	}
 
 	if _, err = r.Seek(int64(dataArrayOffset), io.SeekStart); err != nil {
-		return
+		return nil, 0, err
 	}
 
 	entries := make([]Entry, numColumns)
 	for i := range entries {
+		e := &readerEntry{r: r}
 		if err := errors.Join(
-			binary.Read(r, order, &entries[i].Variant),
-			binary.Read(r, order, &entries[i].data),
+			binary.Read(r, order, &e.variant),
+			binary.Read(r, order, &e.data),
 		); err != nil {
 			return nil, 0, err
 		}
-		entries[i].r = r
+
+		entries[i] = e
 	}
 
-	return &Row{entries}, nextOffset, nil
+	return Row(entries), nextOffset, nil
 }
 
 func (b *Bucket) Next() bool {
@@ -81,7 +91,7 @@ func (b *Bucket) Next() bool {
 	return b.err == nil
 }
 
-func (b *Bucket) Row() *Row {
+func (b *Bucket) Row() Row {
 	return b.row
 }
 
@@ -91,12 +101,9 @@ func (b *Bucket) Err() error {
 
 func (b *Bucket) Reset() error {
 	b.finished = false
+	b.next = uint32(b.base)
 	b.err = nil
 	b.row = nil
-
-	if _, err := b.r.Seek(b.base, io.SeekStart); err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -206,7 +213,7 @@ func (r *Rows) Reset() error {
 	return nil
 }
 
-func (r *Rows) Row() *Row {
+func (r *Rows) Row() Row {
 	if r.bucket == nil {
 		return nil
 	}
@@ -260,7 +267,7 @@ func (h *HashTable) Bucket(i int) (*Bucket, error) {
 	return b, nil
 }
 
-func (h *HashTable) Find(id int) (*Row, error) {
+func (h *HashTable) Find(id int) (Row, error) {
 	bucket, err := h.Bucket(id % h.numBuckets)
 	if errors.Is(err, ErrNullData) {
 		return nil, fmt.Errorf("hash table: %w", ErrRowNotFound)
@@ -271,7 +278,9 @@ func (h *HashTable) Find(id int) (*Row, error) {
 	}
 
 	for bucket.Next() {
-		rowId, err := bucket.Row().Id()
+		row := bucket.Row()
+
+		rowId, err := row.Id()
 		if errors.Is(err, ErrNullData) {
 			continue
 		}
@@ -288,7 +297,7 @@ func (h *HashTable) Find(id int) (*Row, error) {
 	return nil, fmt.Errorf("hash table: %w", ErrRowNotFound)
 }
 
-func (h *HashTable) FindString(id string) (*Row, error) {
+func (h *HashTable) FindString(id string) (Row, error) {
 	return h.Find(int(Sfhash([]byte(id))))
 }
 
