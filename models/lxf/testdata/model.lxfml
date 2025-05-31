@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<!--
+Sample data and schema information modified from:
+https://www.eurobricks.com/forum/forums/topic/92863-understanding-ldds-lxfml-schema/#elComment_1876550
+-->
 <LXFML versionMajor="5" versionMinor="0">
     <Meta>
         <Application name="LEGO Digital Designer" versionMajor="4" versionMinor="3"/>
