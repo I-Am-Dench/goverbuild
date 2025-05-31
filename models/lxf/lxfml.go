@@ -3,6 +3,7 @@ package lxf
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"strconv"
 )
@@ -99,9 +100,9 @@ func (a *Axis) UnmarshalText(text []byte) error {
 	return nil
 }
 
-type intList []int
+type Ints []int
 
-func (l intList) MarshalText() ([]byte, error) {
+func (l Ints) MarshalText() ([]byte, error) {
 	buf := bytes.Buffer{}
 	for i, n := range l {
 		if i != 0 {
@@ -113,7 +114,7 @@ func (l intList) MarshalText() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (l *intList) UnmarshalText(text []byte) error {
+func (l *Ints) UnmarshalText(text []byte) error {
 	parts := bytes.Split(text, []byte(","))
 
 	items := []int{}
@@ -129,15 +130,7 @@ func (l *intList) UnmarshalText(text []byte) error {
 	return nil
 }
 
-type Materials = intList
-type BoneRefs = intList
-
-type List[T any] struct {
-	Items []T
-}
-
 type Camera struct {
-	XMLName        xml.Name             `xml:"Camera"`
 	RefId          int                  `xml:"refID,attr"`
 	FOV            int                  `xml:"fieldOfView,attr"`
 	Distance       float32              `xml:"distance,attr"`
@@ -150,44 +143,78 @@ type Bone struct {
 }
 
 type Part struct {
-	RefId     int       `xml:"refID,attr"`
-	DesignId  int       `xml:"designID,attr"`
-	Materials Materials `xml:"materials,attr"`
-	Bone      Bone      `xml:"Bone"`
+	RefId     int  `xml:"refID,attr"`
+	DesignId  int  `xml:"designID,attr"`
+	Materials Ints `xml:"materials,attr"`
+	Bone      Bone `xml:"Bone"`
 }
 
 type Brick struct {
-	XMLName  xml.Name `xml:"Brick"`
-	RefId    int      `xml:"refID,attr"`
-	DesignId int      `xml:"designID,attr"`
-	Part     Part     `xml:"Part"`
+	RefId    int  `xml:"refID,attr"`
+	DesignId int  `xml:"designID,attr"`
+	Part     Part `xml:"Part"`
 }
 
 type Rigid struct {
-	XMLName        xml.Name             `xml:"Rigid"`
 	RefId          int                  `xml:"refID,attr"`
 	Transformation TransformationMatrix `xml:"transformation,attr"`
-	BoneRefs       BoneRefs             `xml:"boneRefs,attr"`
+	BoneRefs       Ints                 `xml:"boneRefs,attr"`
 }
 
 type RigidRef struct {
-	XMLName  xml.Name `xml:"RigidRef"`
-	RigidRef int      `xml:"rigidRef,attr"`
-	A        Axis     `xml:"a,attr"`
-	Z        Axis     `xml:"z,attr"`
-	T        Axis     `xml:"t,attr"`
+	RigidRef int  `xml:"rigidRef,attr"`
+	A        Axis `xml:"a,attr"`
+	Z        Axis `xml:"z,attr"`
+	T        Axis `xml:"t,attr"`
 }
 
 type Joint struct {
-	XMLName   xml.Name  `xml:"Joint"`
-	Type      JointType `xml:"type,attr"`
-	RigidRefs [2]RigidRef
+	Type      JointType   `xml:"type,attr"`
+	RigidRefs [2]RigidRef `xml:"RigidRef"`
+}
+
+func (j *Joint) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		if attr.Name.Local == "type" {
+			j.Type = JointType(attr.Value)
+		}
+	}
+
+	numRigidRefs := 0
+	for {
+		t, err := d.Token()
+		if err != nil {
+			return err
+		}
+
+		switch token := t.(type) {
+		case xml.StartElement:
+			if token.Name.Local != "RigidRef" {
+				break
+			}
+
+			if numRigidRefs >= 2 {
+				return errors.New("found more than 2 RigidRef's")
+			}
+
+			if err := d.DecodeElement(&j.RigidRefs[numRigidRefs], &token); err != nil {
+				return err
+			}
+			numRigidRefs++
+		case xml.EndElement:
+			if token.Name.Local == "Joint" {
+				if numRigidRefs != 2 {
+					return fmt.Errorf("expected 2 RigidRef's but got %d", numRigidRefs)
+				}
+				return nil
+			}
+		}
+	}
 }
 
 type RigidSystem struct {
-	XMLName xml.Name `xml:"RigidSystem"`
-	Rigids  []Rigid
-	Joints  []Joint
+	Rigids []Rigid `xml:"Rigid"`
+	Joints []Joint `xml:"Joint"`
 }
 
 type GroupSystem struct {
@@ -195,12 +222,12 @@ type GroupSystem struct {
 }
 
 type LXFML[M any] struct {
-	XMLName      xml.Name          `xml:"LXFML"`
-	VersionMajor int               `xml:"versionMajor,attr"`
-	VersionMinor int               `xml:"versionMinor,attr"`
-	Meta         M                 `xml:"Meta"`
-	Cameras      List[Camera]      `xml:"Cameras"`
-	Bricks       List[Brick]       `xml:"Bricks"`
-	RigidSystems List[RigidSystem] `xml:"RigidSystems"`
-	GroupSystems List[GroupSystem] `xml:"GroupSystems"`
+	XMLName      xml.Name      `xml:"LXFML"`
+	VersionMajor int           `xml:"versionMajor,attr"`
+	VersionMinor int           `xml:"versionMinor,attr"`
+	Meta         M             `xml:"Meta"`
+	Cameras      []Camera      `xml:"Cameras>Camera"`
+	Bricks       []Brick       `xml:"Bricks>Brick"`
+	RigidSystems []RigidSystem `xml:"RigidSystems>RigidSystem"`
+	GroupSystems []GroupSystem `xml:"GroupSystems>GroupSystem"`
 }
