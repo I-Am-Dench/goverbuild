@@ -6,7 +6,11 @@ import (
 	"io"
 	"slices"
 	"strings"
+
+	"github.com/I-Am-Dench/goverbuild/database/fdb/internal/deferredwriter"
 )
+
+type writer = deferredwriter.Writer
 
 type RowsFunc func(tableName string) func() (row Row, err error)
 
@@ -24,42 +28,205 @@ func NewBuilder(tables []*Table) *Builder {
 	}
 }
 
-func (b *Builder) writeDescription(w io.WriteSeeker, table *Table) (n int64, err error) {
+func (b *Builder) writeDescription(w *writer, table *Table) (err error) {
+	defer func() {
+		if err == nil {
+			err = w.Flush()
+		}
+	}()
 
-	// if err := binary.Write(w, order, uint32(len(table.Columns))); err != nil {
-	// 	return 0, fmt.Errorf("num columns: %w", err)
-	// }
-	// n += 4
+	if err := w.PutUint32(uint32(len(table.Columns))); err != nil {
+		return fmt.Errorf("num columns: %v", err)
+	}
 
-	// pos, err := w.Seek(0, io.SeekCurrent)
-	// if err != nil {
-	// 	return 0, fmt.Errorf("table name: %w", err)
-	// }
+	if err := w.DeferString(table.Name); err != nil {
+		return fmt.Errorf("table name: %v", err)
+	}
 
-	// b.stringPool.Add(uint32(pos), table.Name)
-	// if err := binary.Write(w, order, uint32(0)); err != nil {
-	// 	return 0, fmt.Errorf("table name: %w", err)
-	// }
-	// n += 4
+	if err := w.Array(len(table.Columns), func(w *writer, i int) error {
+		column := table.Columns[i]
+		if err := w.PutUint32(uint32(column.Variant)); err != nil {
+			return fmt.Errorf("variant: %v", err)
+		}
 
-	// if err := binary.Write(w, order, pos+8); err != nil {
-	// 	return 0, fmt.Errorf("column offset: %w", err)
-	// }
-	// n += 4
+		if err := w.DeferString(column.Name); err != nil {
+			return fmt.Errorf("column name: %v", err)
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("columns: %v", err)
+	}
 
-	// for _, column := range table.Columns {
-	// 	if err := binary.Write(w, order, column.Variant); err != nil {
-	// 		return 0, fmt.Errorf("variant: %s: %v", column.Name, err)
-	// 	}
-	// 	n += 4
-
-	// }
-
-	return 0, nil
+	return nil
 }
 
-func (b *Builder) writeRows(w io.WriteSeeker, table *Table, rows RowsFunc) (n int64, err error) {
-	return 0, nil
+func (b *Builder) collectBuckets(table *Table, f RowsFunc) ([][]Row, error) {
+	if len(table.Columns) == 0 {
+		return [][]Row{}, nil
+	}
+
+	rowsById := make(map[uint32][]Row)
+
+	iter := f(table.Name)
+
+	row, err := iter()
+	for ; err == nil; row, err = iter() {
+		if len(table.Columns) != len(row) {
+			return nil, fmt.Errorf("%s: mismatched columns: expected %d columns but got %d", table.Name, len(table.Columns), len(row))
+		}
+
+		key, err := row.Id()
+		if err != nil {
+			return nil, err
+		}
+
+		rows := rowsById[uint32(key)]
+		rowsById[uint32(key)] = append(rows, row)
+	}
+
+	if err != io.EOF {
+		return nil, err
+	}
+
+	buckets := make([][]Row, bitCeil(len(rowsById)))
+	for id, rows := range rowsById {
+		index := id % uint32(len(buckets))
+		buckets[index] = append(buckets[index], rows...)
+	}
+
+	return buckets, nil
+}
+
+func (b *Builder) writeEntry(w *writer, entry Entry) error {
+	if err := w.PutUint32(uint32(entry.Variant())); err != nil {
+		return fmt.Errorf("variant: %v", entry.Variant())
+	}
+
+	switch entry.Variant() {
+	case NullVariant:
+		if err := w.PutUint32(0); err != nil {
+			return fmt.Errorf("null: %v", err)
+		}
+	case I32Variant:
+		if err := w.PutInt32(entry.Int32()); err != nil {
+			return fmt.Errorf("int32: %v", err)
+		}
+	case U32Variant:
+		if err := w.PutUint32(entry.Uint32()); err != nil {
+			return fmt.Errorf("uint32: %v", err)
+		}
+	case RealVariant:
+		if err := w.PutFloat32(entry.Float32()); err != nil {
+			return fmt.Errorf("float32: %v", err)
+		}
+	case NVarCharVariant, TextVariant:
+		s, err := entry.String()
+		if err != nil {
+			return fmt.Errorf("string: %v", err)
+		}
+
+		if err := w.DeferString(s); err != nil {
+			return fmt.Errorf("string: %v", err)
+		}
+	case BoolVariant:
+		if err := w.PutBool(entry.Bool()); err != nil {
+			return fmt.Errorf("bool: %v", err)
+		}
+	case I64Variant:
+		i, err := entry.Int64()
+		if err != nil {
+			return fmt.Errorf("int64: %v", err)
+		}
+
+		if err := w.DeferInt64(i); err != nil {
+			return fmt.Errorf("int64: %v", err)
+		}
+	case U64Variant:
+		i, err := entry.Uint64()
+		if err != nil {
+			return fmt.Errorf("uint64: %v", err)
+		}
+
+		if err := w.DeferUint64(i); err != nil {
+			return fmt.Errorf("uint64: %v", err)
+		}
+	default:
+		return fmt.Errorf("unknown variant: %v", entry.Variant())
+	}
+	return nil
+}
+
+func (b *Builder) writeRow(w *writer, row Row) (err error) {
+	defer func() {
+		if err == nil {
+			err = w.Flush()
+		}
+	}()
+
+	if err := w.PutUint32(uint32(len(row))); err != nil {
+		return fmt.Errorf("row: num columns: %v", err)
+	}
+
+	if err := w.Array(len(row), func(w *deferredwriter.Writer, i int) error {
+		entry, err := row.Column(i)
+		if err != nil {
+			return fmt.Errorf("row: %d: %v", i, err)
+		}
+
+		if err := b.writeEntry(w, entry); err != nil {
+			return fmt.Errorf("row: %d: %v", i, err)
+		}
+
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *Builder) writeBucket(w *writer, bucket []Row) error {
+	return w.DeferredArray(2, func(w *deferredwriter.Writer, i int) (hasData bool, err error) {
+		if i == 0 {
+			return true, b.writeRow(w, bucket[0])
+		}
+
+		if len(bucket) > 1 {
+			return true, b.writeBucket(w, bucket[1:])
+		}
+		return false, nil // No more data in the list
+	}, false, 0xff)
+}
+
+func (b *Builder) writeBuckets(buckets [][]Row) deferredwriter.DeferredArrayFunc {
+	return func(w *deferredwriter.Writer, i int) (hasData bool, err error) {
+		bucket := buckets[i]
+		if len(bucket) == 0 {
+			return false, nil
+		}
+
+		if err := b.writeBucket(w, bucket); err != nil {
+			return false, fmt.Errorf("bucket: %v", err)
+		}
+
+		return true, nil
+	}
+}
+
+func (b *Builder) writeRows(w *writer, table *Table, rows RowsFunc) error {
+	buckets, err := b.collectBuckets(table, rows)
+	if err != nil {
+		return fmt.Errorf("buckets: %v", err)
+	}
+
+	if err := w.PutUint32(uint32(len(buckets))); err != nil {
+		return fmt.Errorf("buckets: %v", err)
+	}
+
+	if err := w.DeferredArray(len(buckets), b.writeBuckets(buckets), true, 0xff); err != nil {
+		return fmt.Errorf("buckets: %v", err)
+	}
+
+	return nil
 }
 
 func (b *Builder) FlushTo(w io.WriteSeeker, rows RowsFunc) error {
@@ -67,288 +234,28 @@ func (b *Builder) FlushTo(w io.WriteSeeker, rows RowsFunc) error {
 	if err != nil {
 		return err
 	}
-	tableOffset := uint32(n) + 8
+	tableOffset := uint32(n) + 4
 
 	if err := binary.Write(w, order, uint32(len(b.tables))); err != nil {
 		return fmt.Errorf("flush to: num tables: %v", err)
 	}
 
-	if err := binary.Write(w, order, tableOffset); err != nil {
-		return fmt.Errorf("flush to: table offset: %v", err)
-	}
-
-	dw := newDeferredWriter(w, tableOffset)
+	dw := deferredwriter.New(w, order, tableOffset)
 
 	writeDescription := true
-	if err := dw.Array(len(b.tables)*2, 4, func(w io.WriteSeeker, i int) (n int64, err error) {
+	if err := dw.DeferredArray(len(b.tables)*2, func(w *writer, i int) (bool, error) {
 		table := b.tables[i/2]
 
 		if writeDescription {
 			writeDescription = false
-			return b.writeDescription(w, table)
+			return true, b.writeDescription(w, table)
 		} else {
 			writeDescription = true
-			return b.writeRows(w, table, rows)
+			return true, b.writeRows(w, table, rows)
 		}
-	}); err != nil {
+	}, true); err != nil {
 		return fmt.Errorf("flush to: %v", err)
 	}
 
 	return nil
 }
-
-// type stringPool struct {
-// 	Strings map[string]uint32
-// 	Defered map[uint32]string
-// }
-
-// func (p *stringPool) Add(home uint32, s string) {
-// 	if p.Defered == nil {
-// 		p.Defered = map[uint32]string{}
-// 	}
-
-// 	p.Defered[home] = s
-// }
-
-// func (p *stringPool) writeString(w io.WriteSeeker, s string, address uint32) (written int, err error) {
-// 	const alignment = 4
-
-// 	if _, err := w.Seek(int64(address), io.SeekStart); err != nil {
-// 		return 0, err
-// 	}
-
-// 	n, err := WriteNullTerminatedString(s, w)
-// 	if err != nil {
-// 		return 0, err
-// 	}
-// 	written += n
-
-// 	// Alignment padding; Suggested by documentation
-// 	cur := address + uint32(written)
-// 	if padding := alignment - (cur % alignment); padding < alignment {
-// 		zeros := [3]byte{}
-// 		if _, err := w.Write(zeros[:padding]); err != nil {
-// 			return 0, err
-// 		}
-// 		written += int(padding)
-// 	}
-
-// 	return written, nil
-// }
-
-// func (p *stringPool) Flush(w io.WriteSeeker, base uint32) (n int, err error) {
-// 	if p.Defered == nil {
-// 		return 0, nil
-// 	}
-
-// 	for home, text := range p.Defered {
-// 		address, ok := p.Strings[text]
-// 		if !ok {
-// 			written, err := p.writeString(w, text, base)
-// 			if err != nil {
-// 				return 0, fmt.Errorf("string pool: flush: %v", err)
-// 			}
-// 			n += written
-
-// 			p.Strings[text] = base
-// 			address = base
-
-// 			base += uint32(written)
-// 		}
-
-// 		if _, err := w.Seek(int64(home), io.SeekStart); err != nil {
-// 			return 0, fmt.Errorf("string pool: flush: %v", err)
-// 		}
-
-// 		if err := binary.Write(w, order, address); err != nil {
-// 			return 0, fmt.Errorf("string pool: flush: %v", err)
-// 		}
-// 	}
-
-// 	clear(p.Defered)
-// 	return n, nil
-// }
-
-// type RowsFunc func(tableName string) func() (row Row, err error)
-
-// type Builder struct {
-// 	stringPool stringPool
-// 	tables     []*Table
-// }
-
-// func NewBuilder(tables []*Table) *Builder {
-// 	slices.SortFunc(tables, func(a, b *Table) int {
-// 		return strings.Compare(a.Name, b.Name)
-// 	})
-
-// 	return &Builder{
-// 		stringPool: stringPool{
-// 			Strings: map[string]uint32{},
-// 		},
-// 		tables: tables,
-// 	}
-// }
-
-// func (b *Builder) writeHeader(w io.WriteSeeker) (tableOffset uint32, err error) {
-// 	n, err := w.Seek(0, io.SeekCurrent)
-// 	if err != nil {
-// 		return 0, err
-// 	}
-// 	tableOffset = uint32(n) + 8
-
-// 	if err := binary.Write(w, order, uint32(len(b.tables))); err != nil {
-// 		return 0, fmt.Errorf("num tables: %w", err)
-// 	}
-
-// 	if err := binary.Write(w, order, tableOffset); err != nil {
-// 		return 0, fmt.Errorf("table offset: %w", err)
-// 	}
-
-// 	return tableOffset, nil
-// }
-
-// func (b *Builder) writeTable(w io.WriteSeeker, table *Table, address uint32) (pos uint32, err error) {
-// 	pos = address
-
-// 	if err := binary.Write(w, order, uint32(len(table.Columns))); err != nil {
-// 		return 0, fmt.Errorf("num columns: %w", err)
-// 	}
-// 	pos += 4
-
-// 	if err := binary.Write(w, order, uint32(0)); err != nil {
-// 		return 0, fmt.Errorf("table name: %w", err)
-// 	}
-// 	b.stringPool.Add(pos, table.Name)
-// 	pos += 4
-
-// 	if err := binary.Write(w, order, pos+4); err != nil {
-// 		return 0, fmt.Errorf("column offset: %w", err)
-// 	}
-// 	pos += 4
-
-// 	for _, column := range table.Columns {
-// 		if err := binary.Write(w, order, column.Variant); err != nil {
-// 			return 0, fmt.Errorf("variant: %s: %v", column.Name, err)
-// 		}
-// 		pos += 4
-
-// 		if err := binary.Write(w, order, uint32(0)); err != nil {
-// 			return 0, fmt.Errorf("column name: %s: %w", column.Name, err)
-// 		}
-// 		b.stringPool.Add(pos, column.Name)
-// 		pos += 4
-// 	}
-
-// 	written, err := b.stringPool.Flush(w, pos)
-// 	if err != nil {
-// 		return 0, err
-// 	}
-// 	pos += uint32(written)
-
-// 	return pos, nil
-// }
-
-// func (b *Builder) collectBuckets(table *Table, f RowsFunc) ([][]Row, error) {
-// 	if len(table.Columns) == 0 {
-// 		return [][]Row{}, nil
-// 	}
-
-// 	rowsById := map[uint32][]Row{}
-
-// 	iter := f(table.Name)
-// 	row, err := iter()
-// 	for ; err == nil; row, err = iter() {
-// 		if len(table.Columns) != len(row) {
-// 			return nil, fmt.Errorf("%s: mismatched columns: expected %d columns but got %d", table.Name, len(table.Columns), len(row))
-// 		}
-
-// 		key, err := row.Id()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-
-// 		rows := rowsById[uint32(key)]
-// 		rowsById[uint32(key)] = append(rows, row)
-// 	}
-
-// 	if err != io.EOF {
-// 		return nil, err
-// 	}
-
-// 	buckets := make([][]Row, bitCeil(len(rowsById)))
-// 	for id, rows := range rowsById {
-// 		index := id % uint32(len(buckets))
-// 		buckets[index] = append(buckets[index], rows...)
-// 	}
-
-// 	return buckets, nil
-// }
-
-// func (b *Builder) writeRows(w io.WriteSeeker, table *Table, f RowsFunc, address uint32) (pos uint32, err error) {
-// 	pos = address
-
-// 	buckets, err := b.collectBuckets(table, f)
-// 	if err != nil {
-// 		return 0, fmt.Errorf("buckets: %w", err)
-// 	}
-
-// 	if err := binary.Write(w, order, uint32(len(buckets))); err != nil {
-// 		return 0, fmt.Errorf("buckets: %w", err)
-// 	}
-// 	pos += 4
-
-// 	for i := 0; i < len(buckets); i++ {
-// 		if err := binary.Write(w, order, noData); err != nil {
-// 			return 0, fmt.Errorf("buckets: %w", err)
-// 		}
-// 		pos += 4
-// 	}
-
-// 	return pos, nil
-// }
-
-// func (b *Builder) FlushTo(w io.WriteSeeker, rows RowsFunc) error {
-// 	tableOffset, err := b.writeHeader(w)
-// 	if err != nil {
-// 		return fmt.Errorf("flush to: %v", err)
-// 	}
-
-// 	for range b.tables {
-// 		// Allocate initial table array, initialized to 0xffffffff
-// 		if err := errors.Join(
-// 			binary.Write(w, order, noData),
-// 			binary.Write(w, order, noData),
-// 		); err != nil {
-// 			return fmt.Errorf("flush to: %v", err)
-// 		}
-// 	}
-
-// 	descriptionOffset := tableOffset + uint32(len(b.tables)*8)
-
-// 	for i, table := range b.tables {
-// 		if _, err := w.Seek(int64(tableOffset)+int64(i*8), io.SeekStart); err != nil {
-// 			return fmt.Errorf("flush to: %v", err)
-// 		}
-
-// 		if err := binary.Write(w, order, descriptionOffset); err != nil {
-// 			return fmt.Errorf("flush to: description offset: %v", err)
-// 		}
-
-// 		if _, err := w.Seek(int64(descriptionOffset), io.SeekStart); err != nil {
-// 			return fmt.Errorf("flush to: description offset: %v", err)
-// 		}
-
-// 		pos, err := b.writeTable(w, table, uint32(descriptionOffset))
-// 		if err != nil {
-// 			return fmt.Errorf("flush to: description: %v", err)
-// 		}
-
-// 		pos, err = b.writeRows(w, table, rows, pos)
-// 		if err != nil {
-// 			return fmt.Errorf("flush to: rows: %v", err)
-// 		}
-// 		descriptionOffset = pos
-// 	}
-
-// 	return nil
-// }

@@ -77,7 +77,7 @@ func (tab *FdbTable) Row(row fdb.Row) {
 			}
 			fmt.Fprintf(tab, "%d", v)
 		default:
-			fmt.Fprintf(tab, "?unkown: %s?", entry.Variant())
+			fmt.Fprintf(tab, "?unknown: %s?", entry.Variant())
 		}
 		io.WriteString(tab, "\t")
 	}
@@ -147,7 +147,7 @@ func (c *FdbCsv) Row(row fdb.Row) {
 			}
 			record[i] = strconv.FormatUint(v, 10)
 		default:
-			record[i] = fmt.Sprintf("?unkown: %s?", entry.Variant())
+			record[i] = fmt.Sprintf("?unknown: %s?", entry.Variant())
 		}
 	}
 
@@ -159,60 +159,60 @@ func (c *FdbCsv) Flush() error {
 	return nil
 }
 
-func tableRows(db *fdb.DB) fdb.RowsFunc {
-	return func(tableName string) func() (row fdb.Row, err error) {
-		table, ok := db.FindTable(tableName)
-		if !ok {
-			return func() (row fdb.Row, err error) { return nil, io.EOF }
-		}
+// func tableRows(db *fdb.DB) fdb.RowsFunc {
+// 	return func(tableName string) func() (row fdb.Row, err error) {
+// 		table, ok := db.FindTable(tableName)
+// 		if !ok {
+// 			return func() (row fdb.Row, err error) { return nil, io.EOF }
+// 		}
 
-		rows, err := table.HashTable().Rows()
-		if err != nil {
-			return func() (row fdb.Row, err error) { return nil, err }
-		}
+// 		rows, err := table.HashTable().Rows()
+// 		if err != nil {
+// 			return func() (row fdb.Row, err error) { return nil, err }
+// 		}
 
-		return func() (row fdb.Row, err error) {
-			if rows.Next() {
-				return rows.Row(), nil
-			}
+// 		return func() (row fdb.Row, err error) {
+// 			if rows.Next() {
+// 				return rows.Row(), nil
+// 			}
 
-			if rows.Err() != nil {
-				return nil, rows.Err()
-			}
+// 			if rows.Err() != nil {
+// 				return nil, rows.Err()
+// 			}
 
-			return nil, io.EOF
-		}
-	}
-}
+// 			return nil, io.EOF
+// 		}
+// 	}
+// }
 
-func fdbConvert(args []string) {
-	flagset := flag.NewFlagSet("fdb:convert", flag.ExitOnError)
-	flagset.Parse(args)
+// func fdbConvert(args []string) {
+// 	flagset := flag.NewFlagSet("fdb:convert", flag.ExitOnError)
+// 	flagset.Parse(args)
 
-	path := GetArgFilename(flagset, 0)
+// 	path := GetArgFilename(flagset, 0)
 
-	db, err := fdb.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", path)
-	}
+// 	db, err := fdb.Open(path)
+// 	if errors.Is(err, os.ErrNotExist) {
+// 		log.Fatalf("file does not exist: %s", path)
+// 	}
 
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer db.Close()
 
-	f, err := os.OpenFile("cdclient.fdb", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
+// 	f, err := os.OpenFile("cdclient.fdb", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer f.Close()
 
-	builder := fdb.NewBuilder(db.Tables())
+// 	builder := fdb.NewBuilder(db.Tables())
 
-	if err := builder.FlushTo(f, tableRows(db)); err != nil {
-		log.Fatal(err)
-	}
-}
+// 	if err := builder.FlushTo(f, tableRows(db)); err != nil {
+// 		log.Fatal(err)
+// 	}
+// }
 
 func fdbDump(args []string) {
 	flagset := flag.NewFlagSet("fdb:dump", flag.ExitOnError)
@@ -292,9 +292,9 @@ func fdbTables(args []string) {
 }
 
 var FdbCommands = CommandList{
-	"tables":  fdbTables,
-	"dump":    fdbDump,
-	"convert": fdbConvert,
+	"tables": fdbTables,
+	"dump":   fdbDump,
+	// "convert": fdbConvert,
 }
 
 func doFdb(args []string) {
