@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
+	"github.com/I-Am-Dench/goverbuild/database/fdb/internal/deferredwriter"
 )
 
 var (
@@ -70,7 +72,7 @@ func readNullTerminatedBytes(r io.Reader) ([]byte, error) {
 	}
 }
 
-func ReadNullTerminatedString(r io.Reader) (string, error) {
+func ReadZString(r io.Reader) (string, error) {
 	b, err := readNullTerminatedBytes(r)
 	if err != nil {
 		return "", err
@@ -79,19 +81,8 @@ func ReadNullTerminatedString(r io.Reader) (string, error) {
 	}
 }
 
-func WriteNullTerminatedString(s string, w io.Writer) (n int, err error) {
-	written, err := w.Write([]byte(s))
-	if err != nil {
-		return 0, fmt.Errorf("write null terminated string: %v", err)
-	}
-	n += written
-
-	if _, err := w.Write([]byte{0}); err != nil {
-		return 0, fmt.Errorf("write null terminated string: %v", err)
-	}
-	n += 1
-
-	return n, nil
+func WriteZString(w io.Writer, s string) (int, error) {
+	return deferredwriter.WriteZString(w, s)
 }
 
 func bitCeil(n int) int {

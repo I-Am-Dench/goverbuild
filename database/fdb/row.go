@@ -54,7 +54,7 @@ func (e *readerEntry) String() (s string, err error) {
 		return "", err
 	}
 
-	s, err = ReadNullTerminatedString(e.r)
+	s, err = ReadZString(e.r)
 	if err != nil {
 		return "", err
 	}

@@ -67,7 +67,7 @@ func (db *DB) readColumns(r io.ReadSeeker, offset uint32, numColumns int) ([]*Co
 			return nil, fmt.Errorf("read columns: %w", err)
 		}
 
-		name, err := ReadNullTerminatedString(r)
+		name, err := ReadZString(r)
 		if err != nil {
 			return nil, fmt.Errorf("read columns: %w", err)
 		}
@@ -127,7 +127,7 @@ func (db *DB) readTable(r io.ReadSeeker, description, hashTable uint32) (*Table,
 		return nil, fmt.Errorf("read table: %w", err)
 	}
 
-	name, err := ReadNullTerminatedString(r)
+	name, err := ReadZString(r)
 	if err != nil {
 		return nil, fmt.Errorf("read table: %w", err)
 	}
