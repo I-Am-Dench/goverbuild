@@ -9,7 +9,6 @@ import (
 
 type Entry interface {
 	Variant() Variant
-	RawData() uint32
 
 	Int32() int32
 	Uint32() uint32
@@ -18,8 +17,6 @@ type Entry interface {
 	Bool() bool
 	Int64() (int64, error)
 	Uint64() (uint64, error)
-
-	IsNull() bool
 }
 
 type readerEntry struct {
@@ -31,10 +28,6 @@ type readerEntry struct {
 
 func (e *readerEntry) Variant() Variant {
 	return e.variant
-}
-
-func (e *readerEntry) RawData() uint32 {
-	return e.data
 }
 
 func (e *readerEntry) Int32() int32 {
@@ -90,10 +83,6 @@ func (e *readerEntry) Uint64() (v uint64, err error) {
 	return v, nil
 }
 
-func (e *readerEntry) IsNull() bool {
-	return e.variant == NullVariant
-}
-
 type Row []Entry
 
 func (r *Row) Column(col int) (Entry, error) {
@@ -110,33 +99,33 @@ func (r *Row) Id() (int, error) {
 
 	entry := (*r)[0]
 	switch entry.Variant() {
-	case NullVariant:
+	case VariantNull:
 		return 0, ErrNullData
-	case I32Variant:
+	case VariantI32:
 		return int(entry.Int32()), nil
-	case U32Variant:
+	case VariantU32:
 		return int(entry.Uint32()), nil
-	case RealVariant:
+	case VariantReal:
 		return int(math.Float32bits(entry.Float32())), nil
-	case BoolVariant:
+	case VariantBool:
 		v := 0
 		if entry.Bool() {
 			v = 1
 		}
 		return v, nil
-	case I64Variant:
+	case VariantI64:
 		v, err := entry.Int64()
 		if err != nil {
 			return 0, err
 		}
 		return int(v), nil
-	case U64Variant:
+	case VariantU64:
 		v, err := entry.Uint64()
 		if err != nil {
 			return 0, err
 		}
 		return int(v), nil
-	case NVarCharVariant, TextVariant:
+	case VariantNVarChar, VariantText:
 		s, err := entry.String()
 		if err != nil {
 			return 0, err

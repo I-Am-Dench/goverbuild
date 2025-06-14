@@ -15,36 +15,36 @@ var (
 type Variant uint32
 
 const (
-	NullVariant = Variant(iota)
-	I32Variant
-	U32Variant
-	RealVariant
-	NVarCharVariant
-	BoolVariant
-	I64Variant
-	U64Variant
-	TextVariant
+	VariantNull = Variant(iota)
+	VariantI32
+	VariantU32
+	VariantReal
+	VariantNVarChar
+	VariantBool
+	VariantI64
+	VariantU64
+	VariantText
 )
 
 func (v Variant) String() string {
 	switch v {
-	case NullVariant:
+	case VariantNull:
 		return "null"
-	case I32Variant:
+	case VariantI32:
 		return "i32"
-	case U32Variant:
+	case VariantU32:
 		return "u32"
-	case RealVariant:
+	case VariantReal:
 		return "f4"
-	case NVarCharVariant:
+	case VariantNVarChar:
 		return "nvarchar"
-	case BoolVariant:
+	case VariantBool:
 		return "bool"
-	case I64Variant:
+	case VariantI64:
 		return "i64"
-	case U64Variant:
+	case VariantU64:
 		return "u64"
-	case TextVariant:
+	case VariantText:
 		return "text"
 	default:
 		return fmt.Sprintf("Variant(%d)", v)

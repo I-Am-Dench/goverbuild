@@ -103,23 +103,23 @@ func (b *Builder) writeEntry(w *writer, entry Entry) error {
 	}
 
 	switch entry.Variant() {
-	case NullVariant:
+	case VariantNull:
 		if err := w.PutUint32(0); err != nil {
 			return fmt.Errorf("null: %v", err)
 		}
-	case I32Variant:
+	case VariantI32:
 		if err := w.PutInt32(entry.Int32()); err != nil {
 			return fmt.Errorf("int32: %v", err)
 		}
-	case U32Variant:
+	case VariantU32:
 		if err := w.PutUint32(entry.Uint32()); err != nil {
 			return fmt.Errorf("uint32: %v", err)
 		}
-	case RealVariant:
+	case VariantReal:
 		if err := w.PutFloat32(entry.Float32()); err != nil {
 			return fmt.Errorf("float32: %v", err)
 		}
-	case NVarCharVariant, TextVariant:
+	case VariantNVarChar, VariantText:
 		s, err := entry.String()
 		if err != nil {
 			return fmt.Errorf("string: %v", err)
@@ -128,11 +128,11 @@ func (b *Builder) writeEntry(w *writer, entry Entry) error {
 		if err := w.DeferString(s); err != nil {
 			return fmt.Errorf("string: %v", err)
 		}
-	case BoolVariant:
+	case VariantBool:
 		if err := w.PutBool(entry.Bool()); err != nil {
 			return fmt.Errorf("bool: %v", err)
 		}
-	case I64Variant:
+	case VariantI64:
 		i, err := entry.Int64()
 		if err != nil {
 			return fmt.Errorf("int64: %v", err)
@@ -141,7 +141,7 @@ func (b *Builder) writeEntry(w *writer, entry Entry) error {
 		if err := w.DeferInt64(i); err != nil {
 			return fmt.Errorf("int64: %v", err)
 		}
-	case U64Variant:
+	case VariantU64:
 		i, err := entry.Uint64()
 		if err != nil {
 			return fmt.Errorf("uint64: %v", err)

@@ -48,29 +48,29 @@ func (tab *FdbTable) Row(row fdb.Row) {
 		}
 
 		switch entry.Variant() {
-		case fdb.NullVariant:
+		case fdb.VariantNull:
 			io.WriteString(tab, "[null]")
-		case fdb.I32Variant:
+		case fdb.VariantI32:
 			fmt.Fprintf(tab, "%d", entry.Int32())
-		case fdb.U32Variant:
+		case fdb.VariantU32:
 			fmt.Fprintf(tab, "%d", entry.Uint32())
-		case fdb.RealVariant:
+		case fdb.VariantReal:
 			fmt.Fprintf(tab, "%g", entry.Float32())
-		case fdb.NVarCharVariant, fdb.TextVariant:
+		case fdb.VariantNVarChar, fdb.VariantText:
 			s, err := entry.String()
 			if err != nil {
 				log.Fatal(err)
 			}
 			io.WriteString(tab, s)
-		case fdb.BoolVariant:
+		case fdb.VariantBool:
 			fmt.Fprintf(tab, "%t", entry.Bool())
-		case fdb.I64Variant:
+		case fdb.VariantI64:
 			v, err := entry.Int64()
 			if err != nil {
 				log.Fatal(err)
 			}
 			fmt.Fprintf(tab, "%d", v)
-		case fdb.U64Variant:
+		case fdb.VariantU64:
 			v, err := entry.Uint64()
 			if err != nil {
 				log.Fatal(err)
@@ -114,33 +114,33 @@ func (c *FdbCsv) Row(row fdb.Row) {
 		}
 
 		switch entry.Variant() {
-		case fdb.NullVariant:
+		case fdb.VariantNull:
 			record[i] = ""
-		case fdb.I32Variant:
+		case fdb.VariantI32:
 			record[i] = strconv.FormatInt(int64(entry.Int32()), 10)
-		case fdb.U32Variant:
+		case fdb.VariantU32:
 			record[i] = strconv.FormatUint(uint64(entry.Uint32()), 10)
-		case fdb.RealVariant:
+		case fdb.VariantReal:
 			record[i] = strconv.FormatFloat(float64(entry.Float32()), 'g', -1, 32)
-		case fdb.NVarCharVariant, fdb.TextVariant:
+		case fdb.VariantNVarChar, fdb.VariantText:
 			s, err := entry.String()
 			if err != nil {
 				log.Fatal(err)
 			}
 			record[i] = s
-		case fdb.BoolVariant:
+		case fdb.VariantBool:
 			if entry.Bool() {
 				record[i] = "true"
 			} else {
 				record[i] = "false"
 			}
-		case fdb.I64Variant:
+		case fdb.VariantI64:
 			v, err := entry.Int64()
 			if err != nil {
 				log.Fatal(err)
 			}
 			record[i] = strconv.FormatInt(v, 10)
-		case fdb.U64Variant:
+		case fdb.VariantU64:
 			v, err := entry.Uint64()
 			if err != nil {
 				log.Fatal(err)
@@ -294,7 +294,6 @@ func fdbTables(args []string) {
 var FdbCommands = CommandList{
 	"tables": fdbTables,
 	"dump":   fdbDump,
-	// "convert": fdbConvert,
 }
 
 func doFdb(args []string) {
