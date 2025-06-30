@@ -104,7 +104,7 @@ func cacheUpdate(args []string) {
 		}
 	}()
 
-	manifestfile, err := manifest.Open(manifestPath)
+	manifestfile, err := manifest.ReadFile(manifestPath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("manifest file does not exist: %s", manifestPath)
 	}

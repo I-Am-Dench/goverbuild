@@ -16,7 +16,3 @@ type MismatchedMd5HashError struct {
 func (err *MismatchedMd5HashError) Error() string {
 	return fmt.Sprintf("manifest: mismatched md5 hash: %s", err.Line)
 }
-
-func (err *MismatchedMd5HashError) Unwrap() error {
-	return ErrMismatchedHash
-}

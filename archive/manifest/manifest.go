@@ -18,7 +18,17 @@ import (
 )
 
 var (
-	SectionHeader = regexp.MustCompile(`\[([a-zA-Z0-9]+)]`)
+	SectionHeaderPattern = regexp.MustCompile(`\[([a-zA-Z0-9]+)]`)
+	EntryPattern         = regexp.MustCompile(`^([^,]+),([0-9]+),([0-9a-fA-F]+),([0-9]+),([0-9a-fA-F]+),([0-9a-fA-F]+)$`)
+)
+
+const (
+	fieldFileName = iota + 1
+	fieldUncompressedSize
+	fieldUncompressedChecksum
+	fieldCompressedSize
+	fieldCompressedChecksum
+	fieldEntryChecksum
 )
 
 type Sections = map[string][][]byte
@@ -26,6 +36,58 @@ type Sections = map[string][][]byte
 type Entry struct {
 	Path string
 	archive.Info
+}
+
+func (e *Entry) MarshalText() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	fmt.Fprintf(buf, "%s,%d,%x,%d,%x", e.Path, e.UncompressedSize, e.UncompressedChecksum, e.CompressedSize, e.CompressedChecksum)
+
+	checksum := md5.New()
+	checksum.Write(buf.Bytes())
+	fmt.Fprintf(buf, ",%x", checksum.Sum(nil))
+
+	return buf.Bytes(), nil
+}
+
+func (e *Entry) UnmarshalText(text []byte) error {
+	text = bytes.TrimSpace(text)
+
+	matches := EntryPattern.FindSubmatch(text)
+	if matches == nil {
+		return fmt.Errorf("entry: malformed line: %s", string(text))
+	}
+
+	uncompressedSize, err := strconv.ParseUint(string(matches[fieldUncompressedSize]), 10, 32)
+	if err != nil {
+		return fmt.Errorf("entry: %v", err)
+	}
+
+	uncompressedChecksum, _ := hex.DecodeString(string(matches[fieldUncompressedChecksum]))
+
+	compressedSize, err := strconv.ParseUint(string(matches[fieldCompressedSize]), 10, 32)
+	if err != nil {
+		return fmt.Errorf("entry: %v", err)
+	}
+
+	compressedChecksum, _ := hex.DecodeString(string(matches[fieldCompressedChecksum]))
+
+	entryChecksum, _ := hex.DecodeString(string(matches[fieldEntryChecksum]))
+
+	hash := md5.New()
+	hash.Write(bytes.Join(matches[1:len(matches)-1], []byte(",")))
+	if !bytes.Equal(hash.Sum(nil), entryChecksum) {
+		return &MismatchedMd5HashError{string(text)}
+	}
+
+	e.Path = string(matches[fieldFileName])
+	e.Info = archive.Info{
+		UncompressedSize:     uint32(uncompressedSize),
+		UncompressedChecksum: uncompressedChecksum,
+		CompressedSize:       uint32(compressedSize),
+		CompressedChecksum:   compressedChecksum,
+	}
+
+	return nil
 }
 
 type Manifest struct {
@@ -68,14 +130,9 @@ func (manifest *Manifest) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	for _, entry := range manifest.Entries {
-		buf := &bytes.Buffer{}
-		fmt.Fprintf(buf, "%s,%d,%x,%d,%x", entry.Path, entry.UncompressedSize, entry.UncompressedChecksum, entry.CompressedSize, entry.CompressedChecksum)
+		data, _ := entry.MarshalText()
 
-		checksum := md5.New()
-		checksum.Write(buf.Bytes())
-		fmt.Fprintf(buf, ",%x\n", checksum.Sum(nil))
-
-		if n, err := w.Write(buf.Bytes()); err != nil {
+		if n, err := w.Write(append(data, []byte("\n")...)); err != nil {
 			return 0, fmt.Errorf("manifest: write files: %w", err)
 		} else {
 			written += n
@@ -115,7 +172,7 @@ func parseSections(r io.Reader) Sections {
 	for scanner.Scan() {
 		line := scanner.Bytes()
 
-		match := SectionHeader.FindSubmatch(line)
+		match := SectionHeaderPattern.FindSubmatch(line)
 		if len(match) == 0 {
 			if len(line) > 0 {
 				data := make([]byte, len(line))
@@ -167,46 +224,6 @@ func parseVersion(line []byte) (int, string, error) {
 	return version, name, nil
 }
 
-func parseEntry(line []byte) (*Entry, error) {
-	parts := bytes.Split(line, []byte(","))
-	if len(parts) < 6 {
-		return nil, fmt.Errorf("manifest: malformed file line: %s", line)
-	}
-
-	uncompressedSize, err := strconv.Atoi(string(parts[1]))
-	if err != nil {
-		return nil, fmt.Errorf("manifest: malformed file size: %s", line)
-	}
-
-	uncompressedChecksum, _ := hex.DecodeString(string(parts[2]))
-
-	compressedSize, err := strconv.Atoi(string(parts[3]))
-	if err != nil {
-		return nil, fmt.Errorf("manifest: malformed compressed file size: %s", line)
-	}
-
-	compressedChecksum, _ := hex.DecodeString(string(parts[4]))
-
-	checkHash, _ := hex.DecodeString(string(parts[5]))
-
-	hash := md5.New()
-	hash.Write(bytes.Join(parts[:5], []byte(",")))
-	if !bytes.Equal(hash.Sum(nil), checkHash) {
-		return nil, &MismatchedMd5HashError{string(line)}
-	}
-
-	return &Entry{
-		Path: filepath.ToSlash(string(parts[0])),
-		Info: archive.Info{
-			UncompressedSize:     uint32(uncompressedSize),
-			UncompressedChecksum: uncompressedChecksum,
-
-			CompressedSize:     uint32(compressedSize),
-			CompressedChecksum: compressedChecksum,
-		},
-	}, nil
-}
-
 // Uses the provided io.Reader to parse a manifest file per the specification found here: https://docs.lu-dev.net/en/latest/file-structures/manifest.html
 //
 // Manifest sections are not required to be in a specific order. The [version] section is allowed to come after the [files] section.
@@ -239,8 +256,8 @@ func Read(r io.Reader) (*Manifest, error) {
 
 	errs := []error{}
 	for _, line := range files {
-		entry, err := parseEntry(line)
-		if err != nil {
+		entry := &Entry{}
+		if err := entry.UnmarshalText(line); err != nil {
 			errs = append(errs, err)
 		} else {
 			manifest.Entries = append(manifest.Entries, entry)
@@ -257,7 +274,7 @@ func Read(r io.Reader) (*Manifest, error) {
 
 // Opens a file with the provided name and returns the resulting *Manifest from Read.
 // This function always closes the opened file whether Read returned an error or not.
-func Open(name string) (*Manifest, error) {
+func ReadFile(name string) (*Manifest, error) {
 	file, err := os.OpenFile(name, os.O_RDONLY, 0755)
 	if err != nil {
 		return nil, fmt.Errorf("manifest: %w", err)
@@ -268,7 +285,7 @@ func Open(name string) (*Manifest, error) {
 }
 
 // Writes the given *Manifest to the file specified by name.
-func Write(name string, manifest *Manifest) error {
+func WriteFile(name string, manifest *Manifest) error {
 	file, err := os.OpenFile(name, os.O_WRONLY, 0755)
 	if err != nil {
 		return fmt.Errorf("manifest: %w", err)

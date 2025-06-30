@@ -17,7 +17,7 @@ func doManifest(args []string) {
 
 	path := GetArgFilename(flagset, 0)
 
-	manifest, err := manifest.Open(path)
+	manifest, err := manifest.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", path)
 	}

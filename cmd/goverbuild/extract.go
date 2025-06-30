@@ -182,7 +182,7 @@ func doExtract(args []string) {
 		return
 	}
 
-	manifest, err := manifest.Open(*manifestPath)
+	manifest, err := manifest.ReadFile(*manifestPath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("manifest file does not exist: %s", *manifestPath)
 	}
