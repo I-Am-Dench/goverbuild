@@ -13,10 +13,12 @@ import (
 	"github.com/I-Am-Dench/goverbuild/compress/segmented"
 )
 
+var dataSignature = append([]byte("sd0"), 0x01, 0xff)
+
 func createData() []byte {
 	const chars = "abcdefghijklmnopqrstuvwxyz"
 
-	numBytes := int(rand.Float32()*float32(segmented.ChunkSize*2)) + (segmented.ChunkSize * 2)
+	numBytes := int(rand.Float32()*float32(segmented.DefaultChunkSize*2)) + (segmented.DefaultChunkSize * 2)
 	data := make([]byte, 0, numBytes)
 
 	c := 0
@@ -35,13 +37,13 @@ func compress(data []byte) *bytes.Buffer {
 	buf := bytes.NewBuffer(data)
 
 	final := &bytes.Buffer{}
-	final.Write(segmented.Signature)
+	final.Write(dataSignature)
 
 	for buf.Len() > 0 {
-		chunk := buf.Next(segmented.ChunkSize)
+		chunk := buf.Next(segmented.DefaultChunkSize)
 
 		compressed := &bytes.Buffer{}
-		writer, _ := zlib.NewWriterLevel(compressed, 9)
+		writer, _ := zlib.NewWriterLevel(compressed, zlib.BestCompression)
 		writer.Write(chunk)
 		writer.Close()
 
@@ -103,8 +105,8 @@ func testWrite(t *testing.T, data []byte) {
 
 	t.Logf("data writer: compressed %d bytes", actual.Len())
 
-	if actual.Len() != int(writer.BytesCompressed()) {
-		t.Errorf("data writer: writer compressed %d bytes but returned %d", actual.Len(), writer.BytesCompressed())
+	if actual.Len() != int(writer.BytesWritten()) {
+		t.Errorf("data writer: writer compressed %d bytes but returned %d", actual.Len(), writer.BytesWritten())
 	}
 
 	if expected.Len() != actual.Len() {

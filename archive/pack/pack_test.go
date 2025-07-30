@@ -123,7 +123,7 @@ func calculateInfo(data []byte) archive.Info {
 		UncompressedSize:     uint32(uncompressedSize),
 		UncompressedChecksum: uncompressedChecksum.Sum(nil),
 
-		CompressedSize:     uint32(writer.BytesCompressed()),
+		CompressedSize:     uint32(writer.BytesWritten()),
 		CompressedChecksum: compressedChecksum.Sum(nil),
 	}
 }
