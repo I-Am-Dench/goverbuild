@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
+	"errors"
 	"io"
 	"log"
 	"math/rand"
@@ -15,10 +16,10 @@ import (
 
 var dataSignature = append([]byte("sd0"), 0x01, 0xff)
 
-func createData() []byte {
+func createData(dataSize int) []byte {
 	const chars = "abcdefghijklmnopqrstuvwxyz"
 
-	numBytes := int(rand.Float32()*float32(segmented.DefaultChunkSize*2)) + (segmented.DefaultChunkSize * 2)
+	numBytes := int(rand.Float32()*float32(dataSize*2)) + (dataSize * 2)
 	data := make([]byte, 0, numBytes)
 
 	c := 0
@@ -33,14 +34,14 @@ func createData() []byte {
 	return data
 }
 
-func compress(data []byte) *bytes.Buffer {
+func compress(data []byte, chunkSize int) *bytes.Buffer {
 	buf := bytes.NewBuffer(data)
 
 	final := &bytes.Buffer{}
 	final.Write(dataSignature)
 
 	for buf.Len() > 0 {
-		chunk := buf.Next(segmented.DefaultChunkSize)
+		chunk := buf.Next(chunkSize)
 
 		compressed := &bytes.Buffer{}
 		writer, _ := zlib.NewWriterLevel(compressed, zlib.BestCompression)
@@ -84,16 +85,20 @@ func dump(expected, actual *bytes.Buffer) {
 	log.Println("dumped testdata")
 }
 
-func testWrite(t *testing.T, data []byte) {
+func testWriteChunkSize(t *testing.T, data []byte, chunkSize int) {
+	if data == nil {
+		data = createData(chunkSize)
+	}
+
 	t.Logf("data writer: testing %d uncompressed bytes", len(data))
 
-	expected := compress(data)
+	expected := compress(data, chunkSize)
 	t.Logf("data writer: expecting %d compressed bytes", expected.Len())
 
 	actual := &bytes.Buffer{}
 
 	buf := bytes.NewBuffer(data)
-	writer := segmented.NewDataWriter(actual)
+	writer := segmented.NewDataWriterSize(actual, chunkSize)
 
 	if _, err := io.Copy(writer, buf); err != nil {
 		t.Fatalf("data writer: %v", err)
@@ -122,6 +127,13 @@ func testWrite(t *testing.T, data []byte) {
 	}
 }
 
+func testWrite(t *testing.T, data []byte) {
+	testWriteChunkSize(t, data, segmented.DefaultChunkSize)
+	testWriteChunkSize(t, data, 100)
+	testWriteChunkSize(t, data, 500)
+	testWriteChunkSize(t, data, 1000)
+}
+
 func TestDataWriter(t *testing.T) {
 	t.Run("short", func(t *testing.T) {
 		testWrite(t, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
@@ -129,13 +141,17 @@ func TestDataWriter(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		t.Run("random_data", func(t *testing.T) {
-			testWrite(t, createData())
+			testWrite(t, nil)
 		})
 	}
 }
 
-func testRead(t *testing.T, expected []byte) {
-	compressed := compress(expected)
+func testReadChunkSize(t *testing.T, expected []byte, chunkSize int) {
+	if expected == nil {
+		expected = createData(chunkSize)
+	}
+
+	compressed := compress(expected, chunkSize)
 	t.Logf("data reader: testing %d compressed bytes", compressed.Len())
 
 	t.Logf("data reader: expecting %d uncompressed bytes", len(expected))
@@ -165,14 +181,44 @@ func testRead(t *testing.T, expected []byte) {
 	}
 }
 
+func testRead(t *testing.T, expected []byte) {
+	testReadChunkSize(t, expected, segmented.DefaultChunkSize)
+	testReadChunkSize(t, expected, 100)
+	testReadChunkSize(t, expected, 500)
+	testReadChunkSize(t, expected, 1000)
+}
+
 func TestDataReader(t *testing.T) {
 	t.Run("short", func(t *testing.T) {
 		testRead(t, []byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccccccccc"))
+		testRead(t, []byte("dddddddddddddddddddddddddddddddddddddddddddd444444444444444444"))
 	})
 
 	for i := 0; i < 10; i++ {
 		t.Run("random_data", func(t *testing.T) {
-			testRead(t, createData())
+			testRead(t, nil)
 		})
 	}
+}
+
+func TestDataErrors(t *testing.T) {
+	t.Run("short_read", func(t *testing.T) {
+		compressed := compress([]byte("aaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbcccdddddddddddddd111111222223333333333333333333333333333333"), segmented.DefaultChunkSize)
+		compressed.Truncate(compressed.Len() / 2)
+
+		reader, err := segmented.NewDataReader(compressed)
+		if err != nil {
+			t.Fatalf("short read: %v", err)
+		}
+
+		buf := bytes.Buffer{}
+		_, err = io.Copy(&buf, reader)
+		if err == nil {
+			t.Fatalf("short read: truncated buffer read did not return an error")
+		}
+
+		if !errors.Is(err, io.ErrUnexpectedEOF) {
+			t.Fatalf("short read: expected error %q but got %q", io.ErrUnexpectedEOF, err)
+		}
+	})
 }
