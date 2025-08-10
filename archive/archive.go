@@ -3,12 +3,17 @@ package archive
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/snksoft/crc"
+)
+
+var (
+	order = binary.LittleEndian
 )
 
 type Info struct {

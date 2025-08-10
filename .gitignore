@@ -1,2 +1,5 @@
 archive/cache/testdata
 compress/segmented/testdata
+
+*/testdata/dump/
+*/testdata/*.tmp

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,9 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/I-Am-Dench/goverbuild/archive"
 	"github.com/I-Am-Dench/goverbuild/archive/catalog"
 	"github.com/I-Am-Dench/goverbuild/archive/manifest"
-	"github.com/I-Am-Dench/goverbuild/archive/pack"
 )
 
 type Extractor struct {
@@ -24,19 +25,19 @@ type Extractor struct {
 	Client           string
 	RemoveMismatches bool
 
-	packs map[string]*pack.Pack
+	packs map[string]*archive.Pack
 }
 
-func (extractor *Extractor) getPack(name string) (*pack.Pack, error) {
+func (extractor *Extractor) getPack(name string) (*archive.Pack, error) {
 	if extractor.packs == nil {
-		extractor.packs = make(map[string]*pack.Pack)
+		extractor.packs = make(map[string]*archive.Pack)
 	}
 
 	if pack, ok := extractor.packs[name]; ok {
 		return pack, nil
 	}
 
-	pack, err := pack.Open(name)
+	pack, err := archive.OpenPack(name)
 	if err != nil {
 		return nil, fmt.Errorf("get pack: %w", err)
 	}
@@ -119,11 +120,14 @@ func (extractor *Extractor) Extract(path string) {
 	}
 	defer out.Close()
 
-	section, hash, err := record.Section()
+	section, err := record.Section()
 	if err != nil {
 		extractor.logFatal("extractor: %s: %v", path, err)
 		return
 	}
+
+	hash := md5.New()
+	section = io.TeeReader(section, hash)
 
 	if _, err := io.Copy(out, section); err != nil {
 		extractor.logFatal("extractor: %s: %v", path, err)

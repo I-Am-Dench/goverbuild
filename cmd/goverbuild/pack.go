@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,7 +13,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/I-Am-Dench/goverbuild/archive/pack"
+	"github.com/I-Am-Dench/goverbuild/archive"
 )
 
 type PackRecordTable struct {
@@ -25,7 +26,7 @@ func NewPackRecordTable() *PackRecordTable {
 	return &PackRecordTable{tab}
 }
 
-func (tab *PackRecordTable) Record(record *pack.Record) *PackRecordTable {
+func (tab *PackRecordTable) Record(record *archive.PackRecord) *PackRecordTable {
 	fmt.Fprintf(tab, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%d\t%t\n", record.Crc, record.LowerIndex, record.UpperIndex, record.UncompressedSize, record.UncompressedChecksum, record.CompressedSize, record.CompressedChecksum, record.DataPointer(), record.IsCompressed)
 	return tab
 }
@@ -38,7 +39,7 @@ func packShow(args []string) {
 
 	path := GetArgFilename(flagset, 0)
 
-	pack, err := pack.Open(path)
+	pack, err := archive.OpenPack(path)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", path)
 	}
@@ -64,7 +65,7 @@ func packDump(args []string) {
 
 	path := GetArgFilename(flagset, 0)
 
-	pack, err := pack.Open(path)
+	pack, err := archive.OpenPack(path)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", path)
 	}
@@ -88,12 +89,15 @@ func packDump(args []string) {
 			continue
 		}
 
-		section, hash, err := record.Section()
+		section, err := record.Section()
 		if err != nil {
 			log.Printf("dump: %v", err)
 			file.Close()
 			continue
 		}
+
+		hash := md5.New()
+		section = io.TeeReader(section, hash)
 
 		if n, err := io.Copy(file, section); err != nil {
 			log.Printf("dump: %v", err)
@@ -105,7 +109,7 @@ func packDump(args []string) {
 	}
 }
 
-func packSearchAndShow(pack *pack.Pack, path string) {
+func packSearchAndShow(pack *archive.Pack, path string) {
 	record, ok := pack.Search(path)
 	if !ok {
 		fmt.Printf("faild to find \"%s\"\n", path)
@@ -124,7 +128,7 @@ func packSearch(args []string) {
 
 	packPath := GetArgFilename(flagset, 0)
 
-	pack, err := pack.Open(packPath)
+	pack, err := archive.OpenPack(packPath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", packPath)
 	}
@@ -159,7 +163,7 @@ func packExtract(args []string) {
 	packPath := GetArgFilename(flagset, 0, "no pack path provided")
 	findPath := GetArgFilename(flagset, 1, "no resource path provided")
 
-	pack, err := pack.Open(packPath)
+	pack, err := archive.OpenPack(packPath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", packPath)
 	}
@@ -194,10 +198,13 @@ func packExtract(args []string) {
 	}
 	defer file.Close()
 
-	section, hash, err := record.Section()
+	section, err := record.Section()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	hash := md5.New()
+	section = io.TeeReader(section, hash)
 
 	if _, err := io.Copy(file, section); err != nil {
 		log.Fatal(err)
