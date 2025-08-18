@@ -240,7 +240,7 @@ func (e *Env) Dump(t *testing.T, expected, actual []byte) {
 	}
 }
 
-func (e *Env) Check(t *testing.T, pack *archive.Pack) {
+func (e *Env) CheckPack(t *testing.T, pack *archive.Pack) {
 	records := pack.Records()
 	if len(records) != len(e.Records) {
 		t.Errorf("expected %d records but got %d", len(records), len(e.Records))
@@ -322,7 +322,7 @@ func testStore(env *Env) func(t *testing.T) {
 				}
 			}
 
-			env.Check(t, pack)
+			env.CheckPack(t, pack)
 		})
 	}
 }
@@ -346,7 +346,7 @@ func testUpdate(env *Env) func(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				env.Check(t, pack)
+				env.CheckPack(t, pack)
 			}
 		})
 	}
@@ -389,7 +389,7 @@ func testAppend(env *Env) func(t *testing.T) {
 
 			env.Records = append(env.Records, appended...)
 
-			env.Check(t, pack)
+			env.CheckPack(t, pack)
 		})
 	}
 }
@@ -432,7 +432,7 @@ func testSave(env *Env) func(t *testing.T) {
 			}
 		}()
 
-		env.Check(t, pack)
+		env.CheckPack(t, pack)
 	}
 }
 

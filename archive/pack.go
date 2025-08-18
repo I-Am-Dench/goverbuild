@@ -508,7 +508,7 @@ func (p *Pack) init() error {
 	return nil
 }
 
-// Flushes the contents of the [*Pack] to then closes
+// Flushes the contents of the [*Pack], and then closes
 // the underlying [*os.File] ONLY if the [*Pack] was created
 // through a call to OpenPack.
 func (p *Pack) Close() (err error) {
@@ -544,11 +544,11 @@ func NewPack(file *os.File) (*Pack, error) {
 
 // Creates a [*Pack] with the named [*os.File].
 //
-// If OpenPack failed to initialize the [*Pack],
+// If OpenPack fails to initialize the [*Pack],
 // the file is closed.
 //
 // Calling [*Pack.Close] on a [*Pack] created through a call
-// from Open causes the underlying file to be closed.
+// from OpenPack causes the underlying file to be closed.
 func OpenPack(path string) (*Pack, error) {
 	file, err := os.OpenFile(path, os.O_RDWR, 0664)
 	if err != nil {

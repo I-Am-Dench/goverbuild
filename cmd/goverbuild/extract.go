@@ -13,14 +13,13 @@ import (
 	"strings"
 
 	"github.com/I-Am-Dench/goverbuild/archive"
-	"github.com/I-Am-Dench/goverbuild/archive/catalog"
 	"github.com/I-Am-Dench/goverbuild/archive/manifest"
 )
 
 type Extractor struct {
 	Verbose          bool
 	IgnoreErrors     bool
-	Catalog          *catalog.Catalog
+	Catalog          *archive.Catalog
 	Rel              string
 	Client           string
 	RemoveMismatches bool
@@ -158,7 +157,7 @@ func doExtract(args []string) {
 	removeMismatches := flagset.Bool("removemismatches", false, "Remove files with mismatched md5 hashes.")
 	flagset.Parse(args)
 
-	catalog, err := catalog.ReadFile(*catalogPath)
+	catalog, err := archive.OpenCatalog(*catalogPath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("catalog file does not exist: %s", *catalogPath)
 	}

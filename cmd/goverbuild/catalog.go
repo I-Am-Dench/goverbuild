@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/I-Am-Dench/goverbuild/archive/catalog"
+	"github.com/I-Am-Dench/goverbuild/archive"
 )
 
 type CatalogFileTable struct {
@@ -22,7 +22,7 @@ func NewCatalogFileTable() *CatalogFileTable {
 	return &CatalogFileTable{tab}
 }
 
-func (tab *CatalogFileTable) File(file *catalog.Record) *CatalogFileTable {
+func (tab *CatalogFileTable) File(file *archive.CatalogRecord) *CatalogFileTable {
 	fmt.Fprintf(tab, "%d\t%d\t%d\t%s\t%t\n", file.Crc, file.LowerIndex, file.UpperIndex, file.PackName, file.IsCompressed)
 	return tab
 }
@@ -35,7 +35,7 @@ func catalogShow(args []string) {
 
 	path := GetArgFilename(flagset, 0)
 
-	catalog, err := catalog.ReadFile(path)
+	catalog, err := archive.OpenCatalog(path)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", path)
 	}
@@ -45,13 +45,13 @@ func catalogShow(args []string) {
 	}
 
 	tab := NewCatalogFileTable()
-	for _, file := range SkipLimitSlice(*skip, *limit, catalog.Records) {
-		tab.File(file)
+	for _, record := range SkipLimitSlice(*skip, *limit, catalog.Records()) {
+		tab.File(record)
 	}
 	tab.Flush()
 }
 
-func catalogSearchAndShow(catalog *catalog.Catalog, path string) {
+func catalogSearchAndShow(catalog *archive.Catalog, path string) {
 	file, ok := catalog.Search(path)
 	if !ok {
 		fmt.Printf("failed to find \"%s\"\n", path)
@@ -70,7 +70,7 @@ func catalogSearch(args []string) {
 
 	path := GetArgFilename(flagset, 0)
 
-	catalog, err := catalog.ReadFile(path)
+	catalog, err := archive.OpenCatalog(path)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", path)
 	}
@@ -79,7 +79,7 @@ func catalogSearch(args []string) {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("Loaded %d entries from \"%s\"\n", len(catalog.Records), path)
+	fmt.Printf("Loaded %d entries from \"%s\"\n", len(catalog.Records()), path)
 	if len(*find) > 0 {
 		catalogSearchAndShow(catalog, *find)
 		os.Exit(0)
