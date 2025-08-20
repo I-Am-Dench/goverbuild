@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	SectionHeaderPattern = regexp.MustCompile(`\[([a-zA-Z0-9]+)]`)
-	EntryPattern         = regexp.MustCompile(`^([^,]+),([0-9]+),([0-9a-fA-F]+),([0-9]+),([0-9a-fA-F]+),([0-9a-fA-F]+)$`)
+	sectionHeaderPattern = regexp.MustCompile(`\[([a-zA-Z0-9]+)]`)
+	entryPattern         = regexp.MustCompile(`^([^,]+),([0-9]+),([0-9a-fA-F]+),([0-9]+),([0-9a-fA-F]+),([0-9a-fA-F]+)$`)
 )
 
 const (
@@ -52,7 +52,7 @@ func (e *Entry) MarshalText() ([]byte, error) {
 func (e *Entry) UnmarshalText(text []byte) error {
 	text = bytes.TrimSpace(text)
 
-	matches := EntryPattern.FindSubmatch(text)
+	matches := entryPattern.FindSubmatch(text)
 	if matches == nil {
 		return fmt.Errorf("entry: malformed line: %s", string(text))
 	}
@@ -75,8 +75,8 @@ func (e *Entry) UnmarshalText(text []byte) error {
 
 	hash := md5.New()
 	hash.Write(bytes.Join(matches[1:len(matches)-1], []byte(",")))
-	if !bytes.Equal(hash.Sum(nil), entryChecksum) {
-		return &MismatchedMd5HashError{string(text)}
+	if actual := hash.Sum(nil); !bytes.Equal(actual, entryChecksum) {
+		return &MismatchedChecksumError{entryChecksum, actual}
 	}
 
 	e.Path = string(matches[fieldFileName])
@@ -172,7 +172,7 @@ func parseSections(r io.Reader) Sections {
 	for scanner.Scan() {
 		line := scanner.Bytes()
 
-		match := SectionHeaderPattern.FindSubmatch(line)
+		match := sectionHeaderPattern.FindSubmatch(line)
 		if len(match) == 0 {
 			if len(line) > 0 {
 				data := make([]byte, len(line))
@@ -212,8 +212,8 @@ func parseVersion(line []byte) (int, string, error) {
 
 	hash := md5.New()
 	hash.Write(parts[0])
-	if !bytes.Equal(hash.Sum(nil), checkHash) {
-		return 0, "", &MismatchedMd5HashError{string(line)}
+	if actual := hash.Sum(nil); !bytes.Equal(actual, checkHash) {
+		return 0, "", &MismatchedChecksumError{checkHash, actual}
 	}
 
 	name := ""
@@ -237,7 +237,9 @@ func Read(r io.Reader) (*Manifest, error) {
 	version, ok := manifest.Sections["version"]
 	if ok && len(version) > 0 {
 		vers, name, err := parseVersion(version[0])
-		if errors.Is(err, ErrMismatchedHash) {
+
+		checksumErr := &MismatchedChecksumError{}
+		if errors.As(err, &checksumErr) {
 			return nil, err
 		}
 

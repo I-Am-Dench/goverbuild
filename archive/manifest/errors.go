@@ -1,18 +1,11 @@
 package manifest
 
-import (
-	"errors"
-	"fmt"
-)
+import "fmt"
 
-var (
-	ErrMismatchedHash = errors.New("manifest: mismatched hash")
-)
-
-type MismatchedMd5HashError struct {
-	Line string
+type MismatchedChecksumError struct {
+	Expected, Calculated []byte
 }
 
-func (err *MismatchedMd5HashError) Error() string {
-	return fmt.Sprintf("manifest: mismatched md5 hash: %s", err.Line)
+func (e *MismatchedChecksumError) Error() string {
+	return fmt.Sprintf("manifest: mismatched checksum: expected %x but got %x", e.Expected, e.Calculated)
 }
