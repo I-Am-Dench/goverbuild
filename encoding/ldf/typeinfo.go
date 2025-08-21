@@ -17,6 +17,7 @@ type fieldInfo struct {
 	raw       bool
 }
 
+// Pretty much just nabbed this from the native encoding/xml package
 var tinfoMap sync.Map
 
 func getTypeInfo(t reflect.Type) *typeInfo {
