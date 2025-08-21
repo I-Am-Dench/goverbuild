@@ -260,7 +260,7 @@ func (decoder *TextDecoder) Decode(v any) error {
 	return nil
 }
 
-func Unmarshal(data []byte, v any) error {
+func UnmarshalText(data []byte, v any) error {
 	buf := bytes.NewBuffer(data)
 	return NewTextDecoder(buf).Decode(v)
 }

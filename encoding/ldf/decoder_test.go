@@ -15,7 +15,7 @@ func testUnmarshalBasic(expected Basic, format string) error {
 	data := []byte(fmt.Sprintf(format, expected.String, expected.Int32, expected.Float, expected.Double, expected.Uint32, expected.Boolean))
 
 	actual := Basic{}
-	if err := ldf.Unmarshal(data, &actual); err != nil {
+	if err := ldf.UnmarshalText(data, &actual); err != nil {
 		return err
 	}
 
@@ -92,7 +92,7 @@ func testUnmarshalIntegers(expected Integers, format string) error {
 	data := []byte(fmt.Sprintf(format, expected.Int, expected.Uint))
 
 	actual := Integers{}
-	if err := ldf.Unmarshal(data, &actual); err != nil {
+	if err := ldf.UnmarshalText(data, &actual); err != nil {
 		return err
 	}
 
@@ -124,7 +124,7 @@ func TestUnmarshalIntegers(t *testing.T) {
 	data := "INT=9:-9223372036854775808,UINT=8:18446744073709551615"
 
 	largeInts := Integers{}
-	if err := ldf.Unmarshal([]byte(data), &largeInts); err != nil {
+	if err := ldf.UnmarshalText([]byte(data), &largeInts); err != nil {
 		t.Errorf("test unmarshal integers: 64 bit value: %v", err)
 	}
 
@@ -151,7 +151,7 @@ func testSimpleStrings(expected Strings, format string) error {
 	data := []byte(fmt.Sprintf(format, expected.Std8, expected.Std16))
 
 	actual := Strings{}
-	if err := ldf.Unmarshal(data, &actual); err != nil {
+	if err := ldf.UnmarshalText(data, &actual); err != nil {
 		return err
 	}
 
@@ -170,7 +170,7 @@ func testEncodedStrings(expected Strings) error {
 	data := []byte(fmt.Sprintf("U16=0:%s,BYTES=13:%s", expected.U16.String(), string(expected.Bytes)))
 
 	actual := Strings{}
-	if err := ldf.Unmarshal(data, &actual); err != nil {
+	if err := ldf.UnmarshalText(data, &actual); err != nil {
 		return err
 	}
 
