@@ -90,6 +90,9 @@ func (e *Entry) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// File type: [txt]
+//
+// [txt]: https://docs.lu-dev.net/en/latest/file-structures/manifest.html
 type Manifest struct {
 	Version int
 	Name    string
