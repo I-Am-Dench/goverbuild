@@ -17,9 +17,9 @@ type fieldInfo struct {
 	raw       bool
 }
 
-// Pretty much just nabbed this from the native encoding/xml package
 var tinfoMap sync.Map
 
+// Pretty much just nabbed this from the native encoding/xml package
 func getTypeInfo(t reflect.Type) *typeInfo {
 	if info, ok := tinfoMap.Load(t); ok {
 		return info.(*typeInfo)
