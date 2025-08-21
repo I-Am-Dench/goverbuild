@@ -88,31 +88,19 @@ func (encoder *TextEncoder) Encode(v any) error {
 	}
 
 	structValue := reflect.Indirect(reflect.ValueOf(v))
-	structType := structValue.Type()
+	typeInfo := getTypeInfo(structValue.Type())
 
-	for i := 0; i < structType.NumField(); i++ {
-		field := structType.Field(i)
-		tagValue := field.Tag.Get("ldf")
-
-		if tagValue == "-" {
+	for i, field := range typeInfo.fields {
+		if field.ignore {
 			continue
 		}
 
 		value := structValue.Field(i)
-		if !value.IsValid() {
+		if field.omitEmpty && value.IsZero() {
 			continue
 		}
 
-		tokenName, options := parseTag(tagValue)
-		if len(tokenName) == 0 {
-			tokenName = field.Name
-		}
-
-		if options.OmitEmpty && value.IsZero() {
-			continue
-		}
-
-		rawValue, valueType, err := encoder.encodeValue(value, options.Raw)
+		rawValue, valueType, err := encoder.encodeValue(value, field.raw)
 		if err != nil {
 			return fmt.Errorf("ldf: encoder: %w", err)
 		}
@@ -123,7 +111,7 @@ func (encoder *TextEncoder) Encode(v any) error {
 
 		fmt.Fprint(
 			encoder.w,
-			tokenName,
+			field.name,
 			"=",
 			int(valueType),
 			":",

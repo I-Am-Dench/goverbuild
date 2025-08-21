@@ -28,6 +28,19 @@ func splitLineComma(data []byte, atEOF bool) (advance int, token []byte, err err
 	return
 }
 
+type TokenError struct {
+	Err  error
+	Line string
+}
+
+func (err *TokenError) Error() string {
+	return fmt.Sprintf("ldf: token: %s: %s", err.Err, err.Line)
+}
+
+func (err *TokenError) Unwrap() error {
+	return err.Err
+}
+
 type Token struct {
 	Name     string
 	Type     ValueType
@@ -222,25 +235,20 @@ func (decoder *TextDecoder) Decode(v any) error {
 	}
 
 	structValue := reflect.ValueOf(v).Elem()
-	structType := structValue.Type()
+	typeInfo := getTypeInfo(structValue.Type())
 
-	for i := 0; i < structType.NumField(); i++ {
-		field := structType.Field(i)
-		tagValue := field.Tag.Get("ldf")
-
-		if len(tagValue) <= 0 || tagValue == "-" {
+	for i, field := range typeInfo.fields {
+		if field.ignore {
 			continue
 		}
 
-		tokenName, _, _ := strings.Cut(tagValue, ",")
-
-		token, ok := tokens[tokenName]
+		token, ok := tokens[field.name]
 		if !ok {
 			continue
 		}
 
 		value := structValue.Field(i)
-		if !value.IsValid() || !value.CanSet() {
+		if !value.CanSet() {
 			continue
 		}
 
