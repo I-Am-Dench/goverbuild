@@ -73,7 +73,6 @@ func GetCrc(s string) uint32 {
 
 var (
 	ErrNotCataloged    = errors.New("not cataloged")
-	ErrPackNotExist    = errors.New("pack does not exist")
 	ErrCatalogMismatch = errors.New("catalog mismatch")
 )
 
@@ -86,18 +85,27 @@ type Archive struct {
 	packs   map[string]*Pack
 }
 
+func (a *Archive) createIfNotExist(path string) error {
+	file, err := os.OpenFile(path, os.O_CREATE, 0664)
+	if err != nil {
+		return err
+	}
+	file.Close()
+
+	return nil
+}
+
 // Returns a [*Pack], opening it if necessary, for a provided path
 // recorded in the [Archive]'s catalog. FindPack will also return the
 // [*CatalogRecord] associated with that path.
 //
 // Pack paths are cleaned before being joined with the root directory.
 //
-// FindPack returns an [ErrPackNotExist] error ONLY IF [OpenPack]
-// returns an [os.ErrNotExist] error.
+// If the pack does not yet exist, a new one is created.
 func (a *Archive) FindPack(path string) (*Pack, *CatalogRecord, error) {
 	record, ok := a.catalog.Search(path)
 	if !ok {
-		return nil, nil, ErrNotCataloged
+		return nil, nil, fmt.Errorf("%s: %w", path, ErrNotCataloged)
 	}
 
 	pack, ok := a.packs[strings.ToLower(record.PackName)]
@@ -105,13 +113,14 @@ func (a *Archive) FindPack(path string) (*Pack, *CatalogRecord, error) {
 		return pack, record, nil
 	}
 
-	pack, err := OpenPack(filepath.Join(a.root, filepath.Clean(record.PackName)))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil, fmt.Errorf("%w: %s", ErrPackNotExist, record.PackName)
+	packPath := filepath.Join(a.root, filepath.Clean(record.PackName))
+	if err := a.createIfNotExist(packPath); err != nil {
+		return nil, nil, err
 	}
 
+	pack, err := OpenPack(packPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("%s: %w", path, err)
 	}
 
 	a.packs[strings.ToLower(record.PackName)] = pack

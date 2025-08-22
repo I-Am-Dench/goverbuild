@@ -49,7 +49,7 @@ func (e *Extractor) Extract(path string) {
 
 	pack, _, err := e.Archive.FindPack(path)
 	if err != nil {
-		if errors.Is(err, archive.ErrNotCataloged) || errors.Is(err, archive.ErrPackNotExist) {
+		if errors.Is(err, archive.ErrNotCataloged) {
 			e.log("extractor: %s: %v\n", path, err)
 		} else {
 			e.logFatal("extractor: %s: %v", path, err)
