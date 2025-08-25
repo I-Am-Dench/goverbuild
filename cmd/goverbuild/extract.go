@@ -47,19 +47,13 @@ func (e *Extractor) Extract(path string) {
 		return
 	}
 
-	pack, _, err := e.Archive.FindPack(path)
+	record, err := e.Archive.Load(path)
 	if err != nil {
-		if errors.Is(err, archive.ErrNotCataloged) {
+		if errors.Is(err, archive.ErrNotCataloged) || errors.Is(err, archive.ErrNotPacked) {
 			e.log("extractor: %s: %v\n", path, err)
 		} else {
 			e.logFatal("extractor: %s: %v", path, err)
 		}
-		return
-	}
-
-	record, ok := pack.Search(path)
-	if !ok {
-		e.log("extractor: %s: not packed\n", path)
 		return
 	}
 

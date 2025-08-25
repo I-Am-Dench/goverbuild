@@ -73,6 +73,7 @@ func GetCrc(s string) uint32 {
 
 var (
 	ErrNotCataloged    = errors.New("not cataloged")
+	ErrNotPacked       = errors.New("not packed")
 	ErrCatalogMismatch = errors.New("catalog mismatch")
 )
 
@@ -146,6 +147,28 @@ func (a *Archive) Store(path string, info Info, compressed bool, r io.Reader) er
 	}
 
 	return pack.Store(path, info, compressed, r)
+}
+
+// Load retrieves the [*PackRecord] corresponding
+// to the provided path in the catalog and its
+// associated pack.
+//
+// Load will return a wrapped [ErrNotPacked] error
+// if the path's pack was able to be loaded from the
+// catalog, but that pack does not contain a record
+// for the path.
+func (a *Archive) Load(path string) (*PackRecord, error) {
+	pack, _, err := a.FindPack(path)
+	if errors.Is(err, ErrNotCataloged) {
+		return nil, err
+	}
+
+	record, ok := pack.Search(path)
+	if !ok {
+		return nil, fmt.Errorf("%s: %w", path, ErrNotPacked)
+	}
+
+	return record, nil
 }
 
 // Closes all open packs within the [Archive], returning
