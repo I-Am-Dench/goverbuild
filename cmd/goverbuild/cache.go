@@ -24,7 +24,7 @@ func cacheCheck(args []string) {
 		cachePath = flagset.Args()[0]
 	}
 
-	cachefile, err := cache.Open(cachePath, 128)
+	cacheFile, err := cache.ReadFile(cachePath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("cache file does not exist: %s", cachePath)
 	}
@@ -33,12 +33,12 @@ func cacheCheck(args []string) {
 		log.Fatal(err)
 	}
 	defer func() {
-		if err := cachefile.Close(); err != nil {
+		if err := cache.WriteFile(cachePath, cacheFile); err != nil {
 			log.Println(err)
 		}
 	}()
 
-	cachefile.ForEach(func(qc cache.QuickCheck) bool {
+	cacheFile.Range(func(qc cache.QuickCheck) bool {
 		stat, err := os.Stat(filepath.Join(*root, qc.Path()))
 		if err != nil {
 			log.Printf("%s: %v", qc.Path(), err)
@@ -90,7 +90,7 @@ func cacheUpdate(args []string) {
 		manifestPath = flagset.Args()[1]
 	}
 
-	cachefile, err := cache.Open(cachePath, 128)
+	cacheFile, err := cache.ReadFile(cachePath)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("cache file does not exist: %s", cachePath)
 	}
@@ -99,7 +99,7 @@ func cacheUpdate(args []string) {
 		log.Fatal(err)
 	}
 	defer func() {
-		if err := cachefile.Close(); err != nil {
+		if err := cache.WriteFile(cachePath, cacheFile); err != nil {
 			log.Println(err)
 		}
 	}()
@@ -124,7 +124,7 @@ func cacheUpdate(args []string) {
 			continue
 		}
 
-		qc, ok := cachefile.Get(entry.Path)
+		qc, ok := cacheFile.Load(entry.Path)
 		if ok {
 			if err := qc.Check(stat, entry.Info); err == nil {
 				if *verbose {
@@ -139,9 +139,8 @@ func cacheUpdate(args []string) {
 			continue
 		}
 
-		if err := cachefile.Store(entry.Path, stat, entry.Info); err != nil {
-			log.Printf("%s: %v", entry.Path, err)
-		} else if *verbose {
+		cacheFile.Store(entry.Path, stat, entry.Info)
+		if *verbose {
 			fmt.Printf("goverbuild: %s: added!\n", entry.Path)
 		}
 	}

@@ -9,49 +9,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/I-Am-Dench/goverbuild/archive"
 )
-
-type quickCheck struct {
-	path         string
-	lastModified time.Time
-	size         int64
-	hash         []byte
-}
-
-func (qc *quickCheck) Path() string {
-	return qc.path
-}
-
-func (qc *quickCheck) ModTime() time.Time {
-	return qc.lastModified
-}
-
-func (qc *quickCheck) Size() int64 {
-	return qc.size
-}
-
-func (qc *quickCheck) Checksum() []byte {
-	return qc.hash
-}
-
-func (qc *quickCheck) Check(stat os.FileInfo, info archive.Info) error {
-	if !(RoundTime(stat.ModTime()).Equal(qc.lastModified) && stat.Size() == qc.size) {
-		return fmt.Errorf("quickcheck: entry does not match disk: (expected: %s,%d) != (actual: %s,%d)", FormatTime(qc.lastModified), qc.size, FormatTime(stat.ModTime()), stat.Size())
-	}
-
-	if !(int64(info.UncompressedSize) == qc.size && bytes.Equal(info.UncompressedChecksum, qc.hash)) {
-		return fmt.Errorf("quickcheck: entry does not match info: (expected: %d,%x) != (actual: %d,%x)", qc.size, qc.hash, info.UncompressedSize, info.UncompressedChecksum)
-	}
-
-	return nil
-}
 
 type QuickCheck interface {
 	Path() string
@@ -62,24 +27,27 @@ type QuickCheck interface {
 	Check(os.FileInfo, archive.Info) error
 }
 
-type RangeFunc = func(qc QuickCheck) bool
+var quickCheckPattern = regexp.MustCompile(`^([^,]+),([0-9]+\.[0-9]{6}),([0-9]+),([0-9a-fA-F]+)$`)
 
-type Cache struct {
-	sm sync.Map
+const (
+	fieldFileName = iota + 1
+	fieldModTime
+	fieldSize
+	fieldChecksum
+)
 
-	canFlush atomic.Bool
-
-	f *os.File
-
-	flushThreshold int
-
-	modified atomic.Uint32
-
-	addedMux sync.RWMutex
-	added    []*quickCheck
+type quickCheck struct {
+	path     string
+	modTime  time.Time
+	size     int64
+	checksum []byte
 }
 
-func (cache *Cache) parseModTime(s string) (time.Time, error) {
+func (q *quickCheck) MarshalText() ([]byte, error) {
+	return fmt.Appendf([]byte{}, "%s,%s,%d,%x\n", q.path, FormatTime(q.modTime), q.size, q.Checksum()), nil
+}
+
+func (q *quickCheck) parseModTime(s string) (time.Time, error) {
 	rawSeconds, rawNanoseconds, ok := strings.Cut(s, ".")
 	if !ok {
 		return time.Time{}, errors.New("parse mod time: no nanoseconds")
@@ -87,275 +55,199 @@ func (cache *Cache) parseModTime(s string) (time.Time, error) {
 
 	seconds, err := strconv.ParseInt(rawSeconds, 10, 64)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("parse mod time: %w", err)
+		return time.Time{}, fmt.Errorf("parse mod time: %v", err)
 	}
 
 	nanoseconds, err := strconv.ParseInt(rawNanoseconds, 10, 64)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("parse mod time: %w", err)
+		return time.Time{}, fmt.Errorf("parse mod time: %v", err)
 	}
 	nanoseconds *= microToNano
 
 	return time.Unix(seconds, nanoseconds), nil
 }
 
-func (cache *Cache) parseLine(line string) (*quickCheck, error) {
-	parts := strings.Split(line, ",")
-	if len(parts) < 4 {
-		return nil, errors.New("parse line: malformed line")
+func (q *quickCheck) UnmarshalText(text []byte) error {
+	text = bytes.TrimSpace(text)
+
+	matches := quickCheckPattern.FindSubmatch(text)
+	if matches == nil {
+		return fmt.Errorf("quick check: malformed line: %s", string(text))
 	}
 
-	modTime, err := cache.parseModTime(parts[1])
+	modTime, err := q.parseModTime(string(matches[fieldModTime]))
 	if err != nil {
-		return nil, fmt.Errorf("parse line: %w", err)
+		return fmt.Errorf("quick check: %v", err)
 	}
 
-	size, err := strconv.ParseInt(parts[2], 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("parse line: %w", err)
-	}
+	size, _ := strconv.ParseInt(string(matches[fieldSize]), 10, 64)
+	checksum, _ := hex.DecodeString(string(matches[fieldChecksum]))
 
-	hash, err := hex.DecodeString(parts[3])
-	if err != nil {
-		return nil, fmt.Errorf("parse line: %w", err)
-	}
+	q.path = filepath.FromSlash(string(matches[fieldFileName]))
+	q.modTime = modTime
+	q.size = size
+	q.checksum = checksum
 
-	return &quickCheck{
-		path:         strings.ToLower(filepath.FromSlash(parts[0])),
-		lastModified: modTime,
-		size:         size,
-		hash:         hash,
-	}, nil
+	return nil
 }
 
-func (cache *Cache) ForEach(f RangeFunc) {
-	cache.sm.Range(func(key, value any) bool {
-		return f(value.(QuickCheck))
-	})
+func (q *quickCheck) Path() string {
+	return q.path
 }
 
-// Writes the cache's contents to the provided writer.
-func (cache *Cache) WriteTo(w io.Writer) (n int64, err error) {
-	written := int64(0)
-	cache.ForEach(func(qc QuickCheck) bool {
-		var n int
-		n, err = fmt.Fprintf(w, "%s,%s,%d,%x\n", qc.Path(), FormatTime(qc.ModTime()), qc.Size(), qc.Checksum())
-		written += int64(n)
-		return err == nil
-	})
-
-	if err == nil {
-		n = written
-	}
-
-	return
+func (q *quickCheck) ModTime() time.Time {
+	return q.modTime
 }
 
-func (cache *Cache) flushAll() error {
-	stat, err := cache.f.Stat()
-	if err != nil {
-		return err
+func (q *quickCheck) Size() int64 {
+	return q.size
+}
+
+func (q *quickCheck) Checksum() []byte {
+	return q.checksum
+}
+
+func (q *quickCheck) Check(stat os.FileInfo, info archive.Info) error {
+	if !RoundTime(stat.ModTime()).Equal(q.modTime) || stat.Size() != q.size {
+		return fmt.Errorf("entry does not match stat: (expected: %s,%d) != (actual: %s,%d)", FormatTime(q.modTime), q.size, FormatTime(stat.ModTime()), stat.Size())
 	}
 
-	if _, err := cache.f.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-
-	originalSize := stat.Size()
-
-	written, err := cache.WriteTo(cache.f)
-	if err != nil {
-		return err
-	}
-
-	if written < originalSize {
-		return cache.f.Truncate(written)
+	if int64(info.UncompressedSize) != q.size || !bytes.Equal(info.UncompressedChecksum, q.checksum) {
+		return fmt.Errorf("entry does not match info: (expected: %d,%x) != (actual: %d,%x)", q.size, q.checksum, info.UncompressedSize, info.UncompressedChecksum)
 	}
 
 	return nil
 }
 
-func (cache *Cache) flushAdded() error {
-	for _, qc := range cache.added {
-		if _, err := fmt.Fprintf(cache.f, "%s,%s,%d,%x\n", qc.Path(), FormatTime(qc.ModTime()), qc.Size(), qc.Checksum()); err != nil {
-			return err
-		}
+type RangeFunc = func(qc QuickCheck) bool
+
+// File type: txt
+//
+// The cache file, named quickcheck.txt in the orignial patcher,
+// stored a list of comma-separated values of the state of an unpacked
+// client resource from when the patcher was run last. If any of
+// the non-path values (modification time, size, or uncompressed checksum)
+// have changed, the unpacked resource should be reinstalled.
+//
+// Each line in the file takes the form:
+//
+//	%s,%d.%06d,%d,%x
+//
+// With these values associated with an unpacked resource:
+//  1. The relative path
+//  2. The modification time seconds
+//  3. The modification time milliseconds (padded to 6 digits)
+//  4. The size of the resource
+//  5. The md5 hash of the resource
+type Cache struct {
+	sm sync.Map
+}
+
+func (c *Cache) store(path string, qc *quickCheck) {
+	c.sm.Store(strings.ToLower(path), qc)
+}
+
+func (c *Cache) Store(path string, stat os.FileInfo, info archive.Info) {
+	qc := &quickCheck{
+		path:     filepath.FromSlash(path),
+		modTime:  RoundTime(stat.ModTime()),
+		size:     stat.Size(),
+		checksum: info.UncompressedChecksum,
 	}
-
-	return nil
+	c.store(qc.path, qc)
 }
 
-func (cache *Cache) flush(all bool) (err error) {
-	cache.addedMux.Lock()
-	defer cache.addedMux.Unlock()
-
-	if all {
-		err = cache.flushAll()
-	} else {
-		err = cache.flushAdded()
-	}
-
-	cache.modified.Store(0)
-	cache.added = cache.added[:0]
-	cache.canFlush.Store(true)
-
-	return err
-}
-
-func (cache *Cache) varFlush() error {
-	// If a previously loaded entry has been modified, we'll have
-	// to rewrite the whole file since there will most likely be
-	// entries that appear after this one, which need to be shifted down.
-	// There are definitely ways to optimize which parts of the file needs
-	// to rewritten, but rewritting the whole is the simplest solution.
-	rewrite := cache.modified.Load() > 0
-
-	return cache.flush(rewrite)
-}
-
-// Writes the cache's contents, in it's entirety, to the underlying *os.File, and resets
-// the cache's internal state.
-func (cache *Cache) Flush() error {
-	if err := cache.flush(true); err != nil {
-		return fmt.Errorf("cache: flush: %w", err)
-	}
-	return nil
-}
-
-func (cache *Cache) shouldFlush(threshold int) bool {
-	cache.addedMux.RLock()
-	defer cache.addedMux.RUnlock()
-	return uint32(len(cache.added))+cache.modified.Load() >= uint32(threshold)
-}
-
-func (cache *Cache) store(qc *quickCheck) error {
-	_, ok := cache.sm.LoadOrStore(qc.Path(), qc)
-
-	if ok {
-		cache.sm.Store(qc.Path(), qc)
-		cache.modified.Add(1)
-	} else {
-		cache.addedMux.Lock()
-		cache.added = append(cache.added, qc)
-		cache.addedMux.Unlock()
-	}
-
-	if cache.shouldFlush(cache.flushThreshold) && cache.canFlush.Swap(false) {
-		return cache.varFlush()
-	}
-
-	return nil
-}
-
-// Returns the QuickCheck value for the given path.
-func (cache *Cache) Get(path string) (QuickCheck, bool) {
-	v, ok := cache.sm.Load(strings.ToLower(filepath.FromSlash(path)))
+func (c *Cache) Load(path string) (QuickCheck, bool) {
+	v, ok := c.sm.Load(strings.ToLower(filepath.FromSlash(path)))
 	if !ok {
 		return nil, false
 	}
 	return v.(QuickCheck), true
 }
 
-// Sets the QuickCheck of the provided file to the given path as its key. The path is
-// always passed through filepath.FromSlash before being stored.
-//
-// If the number of changes (# modifications + # additions) >= the configured flush threshold,
-// the cache's contents are flushed to underlying *os.File. The result of this flush is NOT
-// guaranteed to be equivalent to calling Flush.
-func (cache *Cache) Store(path string, stat os.FileInfo, info archive.Info) error {
-	qc := &quickCheck{
-		path:         strings.ToLower(filepath.FromSlash(path)),
-		lastModified: RoundTime(stat.ModTime()),
-		size:         stat.Size(),
-		hash:         info.UncompressedChecksum,
-	}
-
-	if err := cache.store(qc); err != nil {
-		return fmt.Errorf("cache: add: %w", err)
-	}
-
-	return nil
+func (c *Cache) Range(f RangeFunc) {
+	c.sm.Range(func(key, value any) bool {
+		return f(value.(QuickCheck))
+	})
 }
 
-func (cache *Cache) FlushThreshold(threshold int) {
-	cache.flushThreshold = threshold
+func (c *Cache) Len() (length int) {
+	c.sm.Range(func(key, value any) bool {
+		length++
+		return true
+	})
+	return length
 }
 
-// Parses the contents of provided io.Reader and stores valid QuickCheck
-// values into the cache. Read returns the first parse error that occurs
-// or any error that is returned from the provided io.Reader. Valid QuickCheck
-// values parsed prior to a parse error are still stored.
-func (cache *Cache) Read(r io.Reader) error {
+// Creates a [*Cache] from the entries scanned from
+// the provided [io.Reader]. Read immediately
+// returns an error if it fails to scan a line or
+// parse a quick check entry.
+func Read(r io.Reader) (*Cache, error) {
 	scanner := bufio.NewScanner(r)
 
+	cache := &Cache{}
 	for scanner.Scan() {
-		qc, err := cache.parseLine(scanner.Text())
-		if err != nil {
-			return fmt.Errorf("cache: read: %w", err)
+		qc := &quickCheck{}
+		if err := qc.UnmarshalText(scanner.Bytes()); err != nil {
+			return nil, fmt.Errorf("cache: read: %v", err)
 		}
-
-		cache.sm.Store(qc.Path(), qc)
+		cache.store(qc.path, qc)
 	}
 
 	if scanner.Err() != nil {
-		return fmt.Errorf("cache: read: %w", scanner.Err())
+		return nil, fmt.Errorf("cache: read: %v", scanner.Err())
+	}
+
+	return cache, nil
+}
+
+// Writes a [*Cache]'s quick check entries to the
+// provided [io.Writer].
+func Write(w io.Writer, c *Cache) (err error) {
+	c.sm.Range(func(key, value any) bool {
+		qc := value.(*quickCheck)
+		text, _ := qc.MarshalText()
+		if _, err = w.Write(text); err != nil {
+			return false
+		}
+		return true
+	})
+
+	if err != nil {
+		err = fmt.Errorf("cache: write: %v", err)
 	}
 
 	return nil
 }
 
-// Flushes the cache's contents, if necessary, to the underlying *os.File,
-// and then closes the file.
-func (cache *Cache) Close() error {
-	if cache.shouldFlush(1) {
-		if err := cache.Flush(); err != nil {
-			return err
-		}
-	}
-
-	return cache.f.Close()
-}
-
-// Creates a new *Cache with an optional flush threshold.
-// The provided *os.File is used as persistent storage for the cache's
-// QuickCheck values. New does NOT parse and store the contents of the
-// given file.
-func New(f *os.File, flush ...int) *Cache {
-	threshold := 0
-	if len(flush) > 0 {
-		threshold = flush[0]
-	}
-
-	cache := &Cache{
-		f: f,
-
-		flushThreshold: threshold,
-
-		added: []*quickCheck{},
-	}
-	cache.canFlush.Store(true)
-
-	return cache
-}
-
-// Creates a new *Cache with an optional flush threshold from the file
-// specified by name. Open creates the file if it doesn't already exist.
-//
-// If opening the file does not return an error, Open parses and stores the
-// contents of that file. If an error occurs when reading the file, the file is
-// immediately closed and that error is returned.
-func Open(name string, flush ...int) (*Cache, error) {
-	file, err := os.OpenFile(name, os.O_CREATE|os.O_RDWR, 0755)
+// Creates a [*Cache] from the entries scanned from
+// the named file. Read immediately
+// returns an error if it fails to scan a line or
+// parse a quick check entry.
+func ReadFile(name string) (*Cache, error) {
+	file, err := os.Open(name)
 	if err != nil {
-		return nil, fmt.Errorf("cache: open: %w", err)
+		return nil, fmt.Errorf("cache: read: %w", err)
 	}
+	defer file.Close()
 
-	cache := New(file, flush...)
-
-	if err := cache.Read(file); err != nil {
-		file.Close()
+	cache, err := Read(file)
+	if err != nil {
 		return nil, err
 	}
 
 	return cache, nil
+}
+
+// Writes a [*Cache]'s quick check entries to the
+// named file.
+func WriteFile(name string, c *Cache) error {
+	file, err := os.Create(name)
+	if err != nil {
+		return fmt.Errorf("cache: write: %w", err)
+	}
+	defer file.Close()
+
+	return Write(file, c)
 }
