@@ -159,7 +159,7 @@ func (a *Archive) Store(path string, info Info, compressed bool, r io.Reader) er
 // for the path.
 func (a *Archive) Load(path string) (*PackRecord, error) {
 	pack, _, err := a.FindPack(path)
-	if errors.Is(err, ErrNotCataloged) {
+	if err != nil {
 		return nil, err
 	}
 
