@@ -124,8 +124,8 @@ type RangeFunc = func(qc QuickCheck) bool
 // File type: txt
 //
 // The cache file, named quickcheck.txt in the orignial patcher,
-// stored a list of comma-separated values of the state of an unpacked
-// client resource from when the patcher was run last. If any of
+// stored a list of comma-separated values for the states of unpacked
+// client resources from when the patcher was last run. If any of
 // the non-path values (modification time, size, or uncompressed checksum)
 // have changed, the unpacked resource should be reinstalled.
 //
