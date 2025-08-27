@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,87 +12,71 @@ import (
 
 func segmentedCompress(args []string) {
 	flagset := flag.NewFlagSet("segmented:compress", flag.ExitOnError)
-	output := flagset.String("o", "", "Sets where to output the file.")
+	output := flagset.String("o", "", "Sets the output path. If this options is not specified, the output name is the input name suffixed with '.sd0'.")
+	chunkSize := flagset.Int("chunkSize", segmented.DefaultChunkSize, "Sets the compression chunk size.")
 	flagset.Parse(args)
 
-	inputPath := GetArgFilename(flagset, 0)
-
-	outputPath := filepath.Base(inputPath)
-	if len(*output) > 0 {
-		outputPath = *output
+	inputName := flagset.Arg(0)
+	if len(inputName) == 0 {
+		Error.Fatal("input name not provided")
 	}
 
-	if stat, err := os.Stat(outputPath); err == nil && stat.IsDir() {
-		outputPath = filepath.Join(*output, filepath.Base(inputPath))
-	}
-	outputPath += ".sd0"
+	outputName := GetOutputName(*output, inputName+".sd0")
 
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		log.Fatal(err)
-	}
-
-	inputFile, err := os.Open(inputPath)
+	inputFile, err := os.Open(inputName)
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 	defer inputFile.Close()
 
-	outputFile, err := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	outputFile, err := os.Create(outputName)
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 	defer outputFile.Close()
 
-	compressor := segmented.NewDataWriter(outputFile)
+	compressor := segmented.NewDataWriterSize(outputFile, *chunkSize)
 
 	if _, err := io.Copy(compressor, inputFile); err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 
 	if err := compressor.Close(); err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 }
 
 func segmentedDecompress(args []string) {
 	flagset := flag.NewFlagSet("segmented:compress", flag.ExitOnError)
-	output := flagset.String("o", "", "Sets where to output the file.")
+	output := flagset.String("o", "", "Sets the output path. If this options is not specified, the output name is the input name trimmed of the '.sd0' suffix.")
 	flagset.Parse(args)
 
-	inputPath := GetArgFilename(flagset, 0)
-
-	outputPath := strings.TrimSuffix(filepath.Base(inputPath), ".sd0")
-	if len(*output) > 0 {
-		outputPath = *output
+	inputName := flagset.Arg(0)
+	if len(inputName) == 0 {
+		Error.Fatal("input name not provided")
 	}
 
-	if stat, err := os.Stat(outputPath); err == nil && stat.IsDir() {
-		outputPath = filepath.Join(*output, strings.TrimSuffix(filepath.Base(inputPath), ".sd0"))
-	}
+	outputName := GetOutputName(*output, strings.TrimSuffix(filepath.Base(inputName), ".sd0"))
 
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		log.Fatal(err)
-	}
-
-	inputFile, err := os.Open(inputPath)
+	inputFile, err := os.Open(inputName)
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 	defer inputFile.Close()
 
-	outputFile, err := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	outputFile, err := os.Create(outputName)
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 	defer outputFile.Close()
 
 	decompressor, err := segmented.NewDataReader(inputFile)
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 
 	if _, err := io.Copy(outputFile, decompressor); err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 }
 
@@ -103,6 +86,8 @@ var SegmentedCommands = CommandList{
 }
 
 func doSegmented(args []string) {
+	SetLogPrefix("goverbuild(segmented): ")
+
 	if len(args) < 1 {
 		SegmentedCommands.Usage()
 	}

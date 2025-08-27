@@ -2,9 +2,9 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -19,26 +19,29 @@ func (list *CommandList) Usage() {
 	log.Fatalf("expected subcommand: {%s}", strings.Join(keys, "|"))
 }
 
-func GetArgFilename(flagset *flag.FlagSet, i int, message ...string) string {
-	m := "no filename provided"
-	if len(message) > 0 {
-		m = message[0]
+func GetOutputName(output, defaultName string) string {
+	if len(output) == 0 {
+		output = defaultName
 	}
 
-	if flagset.NArg() < i+1 {
-		log.Fatal(m)
+	if stat, err := os.Stat(output); err == nil && stat.IsDir() {
+		output = filepath.Join(output, filepath.Base(defaultName))
 	}
 
-	return flagset.Args()[i]
+	if err := os.MkdirAll(filepath.Dir(output), 0755); err != nil {
+		Error.Fatal(err)
+	}
+
+	return output
 }
 
 func SkipLimitSlice[T any](skip, limit int, list []T) []T {
 	if skip < 0 {
-		log.Fatal("starting index must be >= 0")
+		Error.Fatal("starting index must be >= 0")
 	}
 
 	if skip >= len(list) {
-		log.Fatalf("index out of bounds: accessing index %d with length %d", skip, len(list))
+		Error.Fatalf("index out of bounds: accessing index %d with length %d", skip, len(list))
 	}
 
 	endIndex := len(list)

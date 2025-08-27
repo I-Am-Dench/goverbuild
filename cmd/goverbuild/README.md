@@ -1,6 +1,6 @@
 # GOverbuild Tools
 
-This is collection of tools for analyzing and extracting `.pk`, `.pki`, and `.txt` data.
+This is collection of tools for analyzing and extracting `.pk`, `.pki`, `.txt`, and `.sd0` data.
 
 This program was intended for testing library functionality and analyzing pack and catalog data, but the [`extract`](#extract) command may be of use to some users.
 

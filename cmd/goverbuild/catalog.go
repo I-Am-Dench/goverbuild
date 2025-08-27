@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -12,77 +11,84 @@ import (
 	"github.com/I-Am-Dench/goverbuild/archive"
 )
 
-type CatalogFileTable struct {
+type CatalogRecordTable struct {
 	*tabwriter.Writer
 }
 
-func NewCatalogFileTable() *CatalogFileTable {
+func NewCatalogRecordTable() *CatalogRecordTable {
 	tab := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tab, "crc\tcrc_lower\tcrc_upper\tpack_name\tis_compressed")
-	return &CatalogFileTable{tab}
+	return &CatalogRecordTable{tab}
 }
 
-func (tab *CatalogFileTable) File(file *archive.CatalogRecord) *CatalogFileTable {
-	fmt.Fprintf(tab, "%d\t%d\t%d\t%s\t%t\n", file.Crc, file.LowerIndex, file.UpperIndex, file.PackName, file.IsCompressed)
-	return tab
+func (t *CatalogRecordTable) Record(record *archive.CatalogRecord) *CatalogRecordTable {
+	fmt.Fprintf(t, "%d\t%d\t%d\t%s\t%t\n", record.Crc, record.LowerIndex, record.UpperIndex, record.PackName, record.IsCompressed)
+	return t
+}
+
+func openCatalog(path string) *archive.Catalog {
+	catalog, err := archive.OpenCatalog(path)
+	if errors.Is(err, os.ErrNotExist) {
+		Error.Fatalf("catalog does not exist: %s", path)
+	}
+
+	if err != nil {
+		Error.Fatal(err)
+	}
+
+	return catalog
 }
 
 func catalogShow(args []string) {
 	flagset := flag.NewFlagSet("catalog:show", flag.ExitOnError)
-	skip := flagset.Int("skip", 0, "Sets at which file index to start displaying.")
-	limit := flagset.Int("limit", -1, "Sets the maximum amount of files that should be displayed. If the limit is < 0, all files will be shown.")
+	skip := flagset.Int("skip", 0, "How many records to skip before displaying.")
+	limit := flagset.Int("limit", -1, "The maximum amount of records that should be displayed. If the limit is < 0, all records will be shown.")
 	flagset.Parse(args)
 
-	path := GetArgFilename(flagset, 0)
-
-	catalog, err := archive.OpenCatalog(path)
-	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", path)
+	catalogFileName := flagset.Arg(0)
+	if len(catalogFileName) == 0 {
+		Error.Fatal("input name not provided")
 	}
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	catalog := openCatalog(catalogFileName)
+	defer catalog.Close()
 
-	tab := NewCatalogFileTable()
+	tab := NewCatalogRecordTable()
 	for _, record := range SkipLimitSlice(*skip, *limit, catalog.Records()) {
-		tab.File(record)
+		tab.Record(record)
 	}
 	tab.Flush()
 }
 
 func catalogSearchAndShow(catalog *archive.Catalog, path string) {
-	file, ok := catalog.Search(path)
+	record, ok := catalog.Search(path)
 	if !ok {
 		fmt.Printf("failed to find \"%s\"\n", path)
 		return
 	}
 
 	fmt.Println()
-	NewCatalogFileTable().File(file).Flush()
+	NewCatalogRecordTable().Record(record).Flush()
 	fmt.Println()
 }
 
 func catalogSearch(args []string) {
 	flagset := flag.NewFlagSet("catalog:search", flag.ExitOnError)
-	find := flagset.String("find", "", "Specifies the path to serach for in the catalog. Including this option causes the program to exit after receiving a result.")
+	find := flagset.String("find", "", "Specifies the path the search for within the catalog. Including this option causes the program to exit after receiving a result.")
 	flagset.Parse(args)
 
-	path := GetArgFilename(flagset, 0)
-
-	catalog, err := archive.OpenCatalog(path)
-	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", path)
+	catalogFileName := flagset.Arg(0)
+	if len(catalogFileName) == 0 {
+		Error.Fatal("input name not provided")
 	}
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	catalog := openCatalog(catalogFileName)
+	defer catalog.Close()
 
-	fmt.Printf("Loaded %d entries from \"%s\"\n", len(catalog.Records()), path)
+	fmt.Printf("Loaded %d entries from \"%s\"\n", len(catalog.Records()), catalogFileName)
 	if len(*find) > 0 {
 		catalogSearchAndShow(catalog, *find)
-		os.Exit(0)
+		return
 	}
 
 	for {
@@ -103,6 +109,8 @@ var CatalogCommands = CommandList{
 }
 
 func doCatalog(args []string) {
+	SetLogPrefix("goverbuild(catalog): ")
+
 	if len(args) < 1 {
 		CatalogCommands.Usage()
 	}

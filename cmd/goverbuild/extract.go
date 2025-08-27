@@ -5,9 +5,7 @@ import (
 	"crypto/md5"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +15,6 @@ import (
 )
 
 type Extractor struct {
-	Verbose          bool
 	IgnoreErrors     bool
 	RemoveMismatches bool
 
@@ -26,19 +23,11 @@ type Extractor struct {
 	Archive archive.Archive
 }
 
-func (e *Extractor) log(format string, a ...any) {
-	if e.Verbose {
-		fmt.Printf("goverbuild: "+format, a...)
-	}
-}
-
-func (e *Extractor) logFatal(format string, a ...any) {
-	if e.Verbose || e.IgnoreErrors {
-		log.Printf(format, a...)
-	}
-
-	if !e.IgnoreErrors {
-		os.Exit(1)
+func (e *Extractor) LogFatal(format string, a ...any) {
+	if e.IgnoreErrors {
+		Verbose.Printf(format, a...)
+	} else {
+		Error.Fatalf(format, a...)
 	}
 }
 
@@ -50,29 +39,29 @@ func (e *Extractor) Extract(path string) {
 	record, err := e.Archive.Load(path)
 	if err != nil {
 		if errors.Is(err, archive.ErrNotCataloged) || errors.Is(err, archive.ErrNotPacked) {
-			e.log("extractor: %s: %v\n", path, err)
+			Verbose.Printf("%s: %v", path, err)
 		} else {
-			e.logFatal("extractor: %s: %v", path, err)
+			e.LogFatal("%s: %v", path, err)
 		}
 		return
 	}
 
-	outputPath := strings.ToLower(filepath.Join(e.InstallPath, path))
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		e.logFatal("extractor: %s: %v", path, err)
+	outputName := strings.ToLower(filepath.Join(e.InstallPath, path))
+	if err := os.MkdirAll(filepath.Dir(outputName), 0755); err != nil {
+		e.LogFatal("%s: %v", path, err)
 		return
 	}
 
-	outputFile, err := os.Create(outputPath)
+	outputFile, err := os.Create(outputName)
 	if err != nil {
-		e.logFatal("extractor: %s: %v", path, err)
+		e.LogFatal("%s: %v", path, err)
 		return
 	}
 	defer outputFile.Close()
 
 	section, err := record.Section()
 	if err != nil {
-		e.logFatal("extractor: %s: %v", path, err)
+		e.LogFatal("%s: %v", path, err)
 		return
 	}
 
@@ -80,44 +69,45 @@ func (e *Extractor) Extract(path string) {
 	section = io.TeeReader(section, hash)
 
 	if _, err := io.Copy(outputFile, section); err != nil {
-		e.logFatal("extractor: %s: %v", path, err)
+		e.LogFatal("%s: %v", path, err)
 		return
 	}
 
 	if actual := hash.Sum(nil); !bytes.Equal(actual, record.UncompressedChecksum) {
 		if !e.RemoveMismatches {
-			e.logFatal("extractor: %s: hashes do not match: expected %x but got %x", path, record.UncompressedChecksum, actual)
+			e.LogFatal("%s: hashes do not match: expected %x but got %x", path, record.UncompressedChecksum, actual)
 		} else {
 			outputFile.Close()
-			os.Remove(outputPath)
-			e.logFatal("extractor: %s: hashes do not match: expected %x but got %x: removing %s", path, record.UncompressedChecksum, actual, outputPath)
+			os.Remove(outputName)
+			e.LogFatal("%s: hashes do not match: expected %x but got %x; removing %s", path, record.UncompressedChecksum, actual, outputName)
 		}
 	}
 
-	e.log("extractor: success: extracted %s\n", path)
+	Verbose.Printf("success: extracted %s", path)
 }
 
 func doExtract(args []string) {
+	SetLogPrefix("goverbuild(extract): ")
+
 	flagset := flag.NewFlagSet("extract", flag.ExitOnError)
-	verbose := flagset.Bool("v", false, "Verbose.")
-	ignoreErrors := flagset.Bool("ie", false, "Ignores errors. Otherwise, the extractor logs an error and exists with an error code.")
-	manifestPath := flagset.String("manifest", "versions\\trunk.txt", "(.txt) The primary manifest file.")
-	catalogPath := flagset.String("catalog", "versions\\primary.pki", "(.pki) The primary catalog file.")
-	installPath := flagset.String("output", ".", "The directory to extract the client in to.")
-	removeMismatches := flagset.Bool("removemismatches", false, "Remove files with mismatched md5 hashes.")
+	flagset.BoolVar(&VerboseFlag, "v", false, "Enable verbose logging.")
+	ignoreErrors := flagset.Bool("ignoreErrors", false, "Ignore errors. Otherwise, the extractor logs an error and exists with an error code.")
+	manifestName := flagset.String("manifest", filepath.Join("versions", "trunk.txt"), "(.txt) The primary manifest file.")
+	catalogName := flagset.String("catalog", filepath.Join("versions", "primary.pki"), "(.pki) The primary catalog file.")
+	installPath := flagset.String("install", ".", "The directory to extract the client in to.")
+	removeMismatches := flagset.Bool("removeMismatches", false, "Remove files with mismatched md5 hashes.")
 	flagset.Parse(args)
 
-	archive, err := archive.Open(*installPath, *catalogPath)
+	archive, err := archive.Open(*installPath, *catalogName)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("catalog file does not exist: %s", *catalogPath)
+		Error.Fatalf("catalog file does not exist: %s", *catalogName)
 	}
 
 	if err != nil {
-		log.Fatalf("catalog: %v", err)
+		Error.Fatalf("catalog: %v", err)
 	}
 
 	extractor := Extractor{
-		Verbose:          *verbose,
 		IgnoreErrors:     *ignoreErrors,
 		RemoveMismatches: *removeMismatches,
 		InstallPath:      *installPath,
@@ -125,25 +115,25 @@ func doExtract(args []string) {
 	}
 	defer func() {
 		if err := extractor.Archive.Close(); err != nil {
-			log.Print(err)
+			Error.Print(err)
 		}
 	}()
 
-	if flagset.NArg() >= 1 {
-		extractor.Extract(flagset.Arg(0))
+	if name := flagset.Arg(0); len(name) > 0 {
+		extractor.Extract(name)
 		return
 	}
 
-	manifest, err := manifest.ReadFile(*manifestPath)
+	manifest, err := manifest.ReadFile(*manifestName)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("manifest file does not exist: %s", *manifestPath)
+		Error.Fatalf("manifest file does not exist: %s", *manifestName)
 	}
 
 	if err != nil {
-		log.Fatalf("manifest: %v", err)
+		Error.Fatalf("manifest: %v", err)
 	}
 
-	fmt.Printf("(%s) Extracting client resources...\n", manifest.Name)
+	Info.Printf("(%s) Extracting client resources...", manifest.Name)
 	for _, entry := range manifest.Entries {
 		extractor.Extract(entry.Path)
 	}

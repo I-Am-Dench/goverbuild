@@ -4,40 +4,44 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/I-Am-Dench/goverbuild/archive/manifest"
 )
 
 func doManifest(args []string) {
+	SetLogPrefix("goverbuild(manifest): ")
+
 	flagset := flag.NewFlagSet("manifest", flag.ExitOnError)
 	version := flagset.Bool("version", false, "Display only version info")
 	flagset.Parse(args)
 
-	path := GetArgFilename(flagset, 0)
+	fileName := flagset.Arg(0)
+	if len(fileName) == 0 {
+		Error.Fatal("input name not provided")
+	}
 
-	manifest, err := manifest.ReadFile(path)
+	manifestFile, err := manifest.ReadFile(fileName)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", path)
+		Error.Fatalf("file does not exist: %s", fileName)
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 
-	if len(manifest.Name) > 0 {
-		fmt.Printf("Version: %d (%s)\n", manifest.Version, manifest.Name)
+	if len(manifestFile.Name) > 0 {
+		fmt.Printf("Version: %d (%s)\n", manifestFile.Version, manifestFile.Name)
 	} else {
-		fmt.Printf("Version: %d\n", manifest.Version)
+		fmt.Printf("Version: %d\n", manifestFile.Version)
 	}
 
 	if *version {
-		os.Exit(0)
+		return
 	}
 
-	fmt.Printf("Found %d files:\n", len(manifest.Entries))
-	for _, entry := range manifest.Entries {
-		fmt.Print("\t", entry, "\n")
+	Info.Printf("Found %d files:", len(manifestFile.Entries))
+	for _, entry := range manifestFile.Entries {
+		fmt.Printf("%s => uncompressedSize=%d; uncompressedChecksum=%x; compressedSize=%d; compressedChecksum=%x\n", entry.Path, entry.UncompressedSize, entry.UncompressedChecksum, entry.CompressedSize, entry.CompressedChecksum)
 	}
 }

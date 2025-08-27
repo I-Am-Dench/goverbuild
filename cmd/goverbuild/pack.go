@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,28 +25,37 @@ func NewPackRecordTable() *PackRecordTable {
 	return &PackRecordTable{tab}
 }
 
-func (tab *PackRecordTable) Record(record *archive.PackRecord) *PackRecordTable {
-	fmt.Fprintf(tab, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%d\t%t\n", record.Crc, record.LowerIndex, record.UpperIndex, record.UncompressedSize, record.UncompressedChecksum, record.CompressedSize, record.CompressedChecksum, record.DataPointer(), record.IsCompressed)
-	return tab
+func (t *PackRecordTable) Record(record *archive.PackRecord) *PackRecordTable {
+	fmt.Fprintf(t, "%d\t%d\t%d\t%d\t%x\t%d\t%x\t%d\t%t\n", record.Crc, record.LowerIndex, record.UpperIndex, record.UncompressedSize, record.UncompressedChecksum, record.CompressedSize, record.CompressedChecksum, record.DataPointer(), record.IsCompressed)
+	return t
+}
+
+func openPack(path string) *archive.Pack {
+	pack, err := archive.OpenPack(path)
+	if errors.Is(err, os.ErrNotExist) {
+		Error.Fatalf("pack does not exist: %s", path)
+	}
+
+	if err != nil {
+		Error.Fatal(err)
+	}
+
+	return pack
 }
 
 func packShow(args []string) {
 	flagset := flag.NewFlagSet("pack:show", flag.ExitOnError)
-	skip := flagset.Int("skip", 0, "Sets at which record index to start displaying.")
-	limit := flagset.Int("limit", -1, "Sets the maximum amount of records that should be displayed. If the limit is < 0, all records will be shown")
+	skip := flagset.Int("skip", 0, "How many records to skip before displaying.")
+	limit := flagset.Int("limit", -1, "The maximum amount of records that should be displayed. If the limit is < 0, all records will be shown.")
 	flagset.Parse(args)
 
-	path := GetArgFilename(flagset, 0)
-
-	pack, err := archive.OpenPack(path)
-	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", path)
+	packFileName := flagset.Arg(0)
+	if len(packFileName) == 0 {
+		Error.Fatal("input name not provided")
 	}
+
+	pack := openPack(packFileName)
 	defer pack.Close()
-
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	tab := NewPackRecordTable()
 	for _, record := range SkipLimitSlice(*skip, *limit, pack.Records()) {
@@ -58,40 +66,36 @@ func packShow(args []string) {
 
 func packDump(args []string) {
 	flagset := flag.NewFlagSet("pack:dump", flag.ExitOnError)
-	dir := flagset.String("dir", ".", "Sets the output directory for pack record dumps. The directory will be created if it does not already exist.")
-	skip := flagset.Int("skip", 0, "Sets which record index to start dumping from.")
-	limit := flagset.Int("limit", -1, "Sets the maximum amount of records that should be dumped. If the limit is < 0, all records will be dumped.")
+	dir := flagset.String("dir", ".", "The output directory for pack record dumps. The directory will be created if it does not already exist.")
+	skip := flagset.Int("skip", 0, "How many records to skip before dumping.")
+	limit := flagset.Int("limit", -1, "The maximum amount of records that should be dumped. If the limit is < 0, all records will be dumped.")
 	flagset.Parse(args)
 
-	path := GetArgFilename(flagset, 0)
-
-	pack, err := archive.OpenPack(path)
-	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", path)
+	packFileName := flagset.Arg(0)
+	if len(packFileName) == 0 {
+		Error.Fatal("input name not provided")
 	}
+
+	pack := openPack(packFileName)
 	defer pack.Close()
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	if err := os.MkdirAll(*dir, 0755); err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 
-	packname := filepath.Base(path)
+	packName := filepath.Base(packFileName)
 	for i, record := range SkipLimitSlice(*skip, *limit, pack.Records()) {
-		dumppath := filepath.Join(*dir, fmt.Sprint(packname, ".", i, ".dump"))
+		dumpPath := filepath.Join(*dir, fmt.Sprint(packName, ".", i, ".dump"))
 
-		file, err := os.OpenFile(dumppath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+		file, err := os.Create(dumpPath)
 		if err != nil {
-			log.Printf("dump: %v", err)
+			Error.Print(err)
 			continue
 		}
 
 		section, err := record.Section()
 		if err != nil {
-			log.Printf("dump: %v", err)
+			Error.Print(err)
 			file.Close()
 			continue
 		}
@@ -100,9 +104,9 @@ func packDump(args []string) {
 		section = io.TeeReader(section, hash)
 
 		if n, err := io.Copy(file, section); err != nil {
-			log.Printf("dump: %v", err)
+			Error.Print(err)
 		} else {
-			fmt.Printf("Dumped %s (%d bytes); Calculated hash: %x\n", dumppath, n, hash.Sum(nil))
+			Info.Printf("Dumped %s (%d bytes); Calculated hash: %x", dumpPath, n, hash.Sum(nil))
 		}
 
 		file.Close()
@@ -112,7 +116,7 @@ func packDump(args []string) {
 func packSearchAndShow(pack *archive.Pack, path string) {
 	record, ok := pack.Search(path)
 	if !ok {
-		fmt.Printf("faild to find \"%s\"\n", path)
+		fmt.Printf("failed to find \"%s\"\n", path)
 		return
 	}
 
@@ -123,24 +127,21 @@ func packSearchAndShow(pack *archive.Pack, path string) {
 
 func packSearch(args []string) {
 	flagset := flag.NewFlagSet("pack:search", flag.ExitOnError)
-	find := flagset.String("find", "", "Specifies the path to search for within the pack. Including this option causes the program to exit after receiving a result.")
+	find := flagset.String("find", "", "Specifies the path the search for within the pack. Including this option causes the program to exit after receiving a result.")
 	flagset.Parse(args)
 
-	packPath := GetArgFilename(flagset, 0)
-
-	pack, err := archive.OpenPack(packPath)
-	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", packPath)
+	packFileName := flagset.Arg(0)
+	if len(packFileName) == 0 {
+		Error.Fatal("input name not provided")
 	}
 
-	if err != nil {
-		log.Fatal(err)
-	}
+	pack := openPack(packFileName)
+	defer pack.Close()
 
-	fmt.Printf("Loaded %d records from \"%s\"\n", len(pack.Records()), packPath)
+	fmt.Printf("Loaded %d records from \"%s\"\n", len(pack.Records()), packFileName)
 	if len(*find) > 0 {
 		packSearchAndShow(pack, *find)
-		os.Exit(0)
+		return
 	}
 
 	for {
@@ -157,64 +158,53 @@ func packSearch(args []string) {
 
 func packExtract(args []string) {
 	flagset := flag.NewFlagSet("pack:extract", flag.ExitOnError)
-	output := flagset.String("output", "", "Specifies the output path of the extracted resource.")
+	output := flagset.String("o", "", "Specified the output path of the extracted resource.")
 	flagset.Parse(args)
 
-	packPath := GetArgFilename(flagset, 0, "no pack path provided")
-	findPath := GetArgFilename(flagset, 1, "no resource path provided")
-
-	pack, err := archive.OpenPack(packPath)
-	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", packPath)
+	packFileName := flagset.Arg(0)
+	if len(packFileName) == 0 {
+		Error.Fatal("pack path not provided")
 	}
+
+	findFileName := flagset.Arg(1)
+	if len(findFileName) == 0 {
+		Error.Fatal("resource path not provided")
+	}
+
+	pack := openPack(packFileName)
 	defer pack.Close()
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	record, ok := pack.Search(findPath)
+	record, ok := pack.Search(findFileName)
 	if !ok {
-		fmt.Printf("failed to find \"%s\"\n", findPath)
+		Error.Printf("failed to find \"%s\"", findFileName)
 		os.Exit(3)
 	}
 
-	outputPath := filepath.Base(findPath)
-	if len(*output) > 0 {
-		outputPath = *output
-	}
+	outputName := GetOutputName(*output, findFileName)
 
-	if stat, err := os.Stat(outputPath); err == nil && stat.IsDir() {
-		outputPath = filepath.Join(*output, filepath.Base(findPath))
-	}
-
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		log.Fatal(err)
-	}
-
-	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	file, err := os.Create(outputName)
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 	defer file.Close()
 
 	section, err := record.Section()
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 
 	hash := md5.New()
 	section = io.TeeReader(section, hash)
 
 	if _, err := io.Copy(file, section); err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 
-	if h := hash.Sum(nil); !bytes.Equal(h, record.UncompressedChecksum) {
-		log.Printf("warning: md5 hashes do not match: %x != %x", h, record.UncompressedChecksum)
+	if actual := hash.Sum(nil); !bytes.Equal(actual, record.UncompressedChecksum) {
+		Error.Printf("warning: md5 hashes do not match expected %x but got %x", record.UncompressedChecksum, actual)
 	}
 
-	fmt.Printf("extracted \"%s\" to \"%s\"\n", findPath, outputPath)
+	Info.Printf("extracted \"%s\" to \"%s\"", findFileName, outputName)
 }
 
 var PackCommands = CommandList{
@@ -225,6 +215,8 @@ var PackCommands = CommandList{
 }
 
 func doPack(args []string) {
+	SetLogPrefix("goverbuild(pack): ")
+
 	if len(args) < 1 {
 		PackCommands.Usage()
 	}

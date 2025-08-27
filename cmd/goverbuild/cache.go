@@ -3,8 +3,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -15,45 +13,43 @@ import (
 
 func cacheCheck(args []string) {
 	flagset := flag.NewFlagSet("cache:check", flag.ExitOnError)
-	verbose := flagset.Bool("v", false, "Verbose mode.")
+	flagset.BoolVar(&VerboseFlag, "v", false, "Enable verbose logging.")
 	root := flagset.String("root", ".", "Root directory for quick check resources.")
 	flagset.Parse(args)
 
-	cachePath := "versions/quickcheck.txt"
-	if flagset.NArg() > 0 {
-		cachePath = flagset.Args()[0]
+	cacheFileName := flagset.Arg(0)
+	if len(cacheFileName) == 0 {
+		cacheFileName = filepath.Join("versions", "quickcheck.txt")
 	}
 
-	cacheFile, err := cache.ReadFile(cachePath)
+	cacheFile, err := cache.ReadFile(cacheFileName)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("cache file does not exist: %s", cachePath)
+		Error.Fatalf("cache file does not exist: %s", cacheFileName)
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 	defer func() {
-		if err := cache.WriteFile(cachePath, cacheFile); err != nil {
-			log.Println(err)
+		if err := cache.WriteFile(cacheFileName, cacheFile); err != nil {
+			Error.Println(err)
 		}
 	}()
 
 	cacheFile.Range(func(qc cache.QuickCheck) bool {
 		stat, err := os.Stat(filepath.Join(*root, qc.Path()))
 		if err != nil {
-			log.Printf("%s: %v", qc.Path(), err)
+			Error.Printf("%s: %v", qc.Path(), err)
 			return true
 		}
 
-		info := archive.Info{
+		if err := qc.Check(stat, archive.Info{
 			UncompressedSize:     uint32(qc.Size()),
 			UncompressedChecksum: qc.Checksum(),
-		}
-
-		if err := qc.Check(stat, info); err != nil {
-			log.Printf("%s: %v", qc.Path(), err)
-		} else if *verbose {
-			fmt.Printf("goverbuild: %s: entry matches!\n", qc.Path())
+		}); err != nil {
+			Error.Printf("%s: %v", qc.Path(), err)
+		} else {
+			Verbose.Printf("%s: entry matches!", qc.Path())
 		}
 
 		return true
@@ -76,73 +72,69 @@ func verifyEntry(path string, entry *manifest.Entry) error {
 
 func cacheUpdate(args []string) {
 	flagset := flag.NewFlagSet("cache:update", flag.ExitOnError)
-	verbose := flagset.Bool("v", false, "Verbose mode.")
+	flagset.BoolVar(&VerboseFlag, "v", false, "Enable verbose logging.")
 	root := flagset.String("root", ".", "Root directory for quick check resources.")
 	flagset.Parse(args)
 
-	cachePath := "versions/quickcheck.txt"
-	if flagset.NArg() > 0 {
-		cachePath = flagset.Args()[0]
+	cacheFileName := flagset.Arg(0)
+	if len(cacheFileName) == 0 {
+		cacheFileName = filepath.Join("versions", "quickcheck.txt")
 	}
 
-	manifestPath := "versions/trunk.txt"
-	if flagset.NArg() > 1 {
-		manifestPath = flagset.Args()[1]
+	manifestFileName := flagset.Arg(1)
+	if len(manifestFileName) == 0 {
+		manifestFileName = filepath.Join("versions", "trunk.txt")
 	}
 
-	cacheFile, err := cache.ReadFile(cachePath)
+	cacheFile, err := cache.ReadFile(cacheFileName)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("cache file does not exist: %s", cachePath)
+		Error.Fatalf("cache file does not exist: %s", cacheFileName)
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 	defer func() {
-		if err := cache.WriteFile(cachePath, cacheFile); err != nil {
-			log.Println(err)
+		if err := cache.WriteFile(cacheFileName, cacheFile); err != nil {
+			Error.Print(err)
 		}
 	}()
 
-	manifestfile, err := manifest.ReadFile(manifestPath)
+	manifestFile, err := manifest.ReadFile(manifestFileName)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("manifest file does not exist: %s", manifestPath)
+		Error.Fatalf("manifest file does not exist: %s", manifestFileName)
 	}
 
 	if err != nil {
-		log.Println(err)
+		Error.Fatal(err)
 	}
 
-	for _, entry := range manifestfile.Entries {
+	for _, entry := range manifestFile.Entries {
 		stat, err := os.Stat(filepath.Join(*root, entry.Path))
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 
 		if err != nil {
-			log.Printf("%s: %v", entry.Path, err)
+			Info.Printf("%s: %v", entry.Path, err)
 			continue
 		}
 
 		qc, ok := cacheFile.Load(entry.Path)
 		if ok {
 			if err := qc.Check(stat, entry.Info); err == nil {
-				if *verbose {
-					fmt.Printf("goverbuild: %s: entry matches!\n", entry.Path)
-				}
+				Verbose.Printf("%s: entry matches!", entry.Path)
 				continue
 			}
 		}
 
 		if err := verifyEntry(filepath.Join(*root, entry.Path), entry); err != nil {
-			log.Printf("%s: %v", entry.Path, err)
+			Verbose.Printf("%s: %v", entry.Path, err)
 			continue
 		}
 
 		cacheFile.Store(entry.Path, stat, entry.Info)
-		if *verbose {
-			fmt.Printf("goverbuild: %s: added!\n", entry.Path)
-		}
+		Verbose.Printf("%s: added!", entry.Path)
 	}
 }
 
@@ -152,6 +144,8 @@ var CacheCommands = CommandList{
 }
 
 func doCache(args []string) {
+	SetLogPrefix("goverbuild(cache): ")
+
 	if len(args) < 1 {
 		CacheCommands.Usage()
 	}
