@@ -49,12 +49,13 @@ func (w *DataWriter) flushChunk() (n int, err error) {
 	}
 	n += 4
 
-	if written, err := io.Copy(w.baseWriter, &w.buf); err != nil {
+	if written, err := w.baseWriter.Write(w.buf.Bytes()); err != nil {
 		return n, err
 	} else {
-		n += int(written)
+		n += written
 	}
 
+	w.buf.Reset()
 	w.zlibWriter.Reset(&w.buf)
 	w.bytesLeft = w.chunkSize
 	return n, nil
