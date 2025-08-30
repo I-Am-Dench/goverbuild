@@ -8,18 +8,20 @@ import (
 	"log"
 	"os"
 
+	"github.com/I-Am-Dench/goverbuild/database/fdb"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type Converter interface {
 	WriteFdb(io.WriteSeeker) error
+	WriteDb(*fdb.DB) error
 }
 
 var DriverName string
 
 const Usage = `Usage:
 	gb-fdb toFdb [options] <database DSN> [output file]
-	gb-fdb fromFdb [options] <input file> <database DSN>`
+	gb-fdb fromFdb [options] <database DSN> [input file]`
 
 func usage(flagset *flag.FlagSet) func() {
 	return func() {
@@ -89,6 +91,29 @@ func main() {
 			log.Fatal(err)
 		}
 	case "fromFdb":
+		output := flagset.Arg(0)
+		if len(output) == 0 {
+			log.Fatal("missing database DSN")
+		}
+
+		input := flagset.Arg(1)
+		if len(input) == 0 {
+			input = "cdclient.fdb"
+		}
+
+		converter, err := GetConverter(DriverName, output)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		db, err := fdb.Open(input)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if err := converter.WriteDb(db); err != nil {
+			log.Fatal(err)
+		}
 	default:
 		log.Fatalf("unknown subcommand: %s", subcommand)
 	}

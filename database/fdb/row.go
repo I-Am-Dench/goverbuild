@@ -85,11 +85,39 @@ func (e *readerEntry) Uint64() (v uint64, err error) {
 
 type Row []Entry
 
-func (r *Row) Column(col int) (Entry, error) {
-	if col >= len(*r) {
-		return nil, fmt.Errorf("out of range: %d", col)
+func (r *Row) Column(i int) (Entry, error) {
+	if i >= len(*r) {
+		return nil, fmt.Errorf("out of range: %d", i)
 	}
-	return (*r)[col], nil
+	return (*r)[i], nil
+}
+
+func (r *Row) Value(i int) (any, error) {
+	col, err := r.Column(i)
+	if err != nil {
+		return nil, err
+	}
+
+	switch col.Variant() {
+	case VariantNull:
+		return nil, nil
+	case VariantI32:
+		return col.Int32(), nil
+	case VariantU32:
+		return col.Uint32(), nil
+	case VariantReal:
+		return col.Float32(), nil
+	case VariantNVarChar, VariantText:
+		return col.String()
+	case VariantBool:
+		return col.Bool(), nil
+	case VariantI64:
+		return col.Int64()
+	case VariantU64:
+		return col.Uint64()
+	default:
+		return nil, fmt.Errorf("unknown variant: %v", col.Variant())
+	}
 }
 
 func (r *Row) Id() (int, error) {

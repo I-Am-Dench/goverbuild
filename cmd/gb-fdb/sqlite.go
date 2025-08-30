@@ -36,6 +36,27 @@ func (db *Sqlite) toVariant(colType string) (fdb.Variant, bool) {
 	}
 }
 
+func (db *Sqlite) toColType(variant fdb.Variant) (string, bool) {
+	switch variant {
+	case fdb.VariantI32:
+		return "INT32", true
+	case fdb.VariantReal:
+		return "REAL", true
+	case fdb.VariantNVarChar:
+		return "TEXT4", true
+	case fdb.VariantBool:
+		return "INT_BOOL", true
+	case fdb.VariantI64:
+		return "INT64", true
+	case fdb.VariantText:
+		return "BLOB", true
+	case fdb.VariantNull:
+		return "BLOB_NONE", true
+	default:
+		return "", false
+	}
+}
+
 func (db *Sqlite) queryTable(name string) (*fdb.Table, error) {
 	rows, err := db.Query("SELECT name, type, pk FROM pragma_table_info(?)", name)
 	if err != nil {
@@ -169,6 +190,118 @@ func (db *Sqlite) WriteFdb(w io.WriteSeeker) error {
 	}); err != nil {
 		return fmt.Errorf("sqlite3: %v", err)
 	}
+
+	return nil
+}
+
+func (db *Sqlite) dropTables(tables []*fdb.Table) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, table := range tables {
+		if _, err := tx.Exec(fmt.Sprint("DROP TABLE IF EXISTS ", table.Name)); err != nil {
+			return fmt.Errorf("drop %s: %v", table.Name, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Sqlite) rowValues(row fdb.Row, values []any) error {
+	for i := range values {
+		v, err := row.Value(i)
+		if err != nil {
+			return err
+		}
+
+		values[i] = v
+	}
+	return nil
+}
+
+func (db *Sqlite) createTable(table *fdb.Table) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	placeholders := strings.Builder{}
+	colNames := strings.Builder{}
+	for i, col := range table.Columns {
+		colType, ok := db.toColType(col.Variant)
+		if !ok {
+			return fmt.Errorf("%s: invalid column variant: %v", col.Name, col.Variant)
+		}
+
+		if i > 0 {
+			placeholders.WriteRune(',')
+			colNames.WriteRune(',')
+		}
+
+		placeholders.WriteRune('?')
+
+		colNames.WriteRune('"')
+		colNames.WriteString(col.Name)
+		colNames.WriteString("\" ")
+		colNames.WriteString(colType)
+	}
+
+	query := fmt.Sprint("CREATE TABLE ", table.Name, " (", colNames.String(), ")")
+	if _, err := tx.Exec(query); err != nil {
+		return err
+	}
+
+	rows, err := table.HashTable().Rows()
+	if err != nil {
+		return err
+	}
+
+	insertQuery := fmt.Sprint("INSERT INTO ", table.Name, " VALUES (", placeholders.String(), ")")
+
+	values := make([]any, len(table.Columns))
+	for rows.Next() {
+		if err := db.rowValues(rows.Row(), values); err != nil {
+			return err
+		}
+
+		if _, err := tx.Exec(insertQuery, values...); err != nil {
+			return err
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *Sqlite) WriteDb(f *fdb.DB) error {
+	if err := db.dropTables(f.Tables()); err != nil {
+		return err
+	}
+
+	for _, table := range f.Tables() {
+		if err := db.createTable(table); err != nil {
+			return fmt.Errorf("create table %s: %v", table.Name, err)
+		}
+	}
+
+	// if err := db.createTable(f.Tables()[0]); err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
