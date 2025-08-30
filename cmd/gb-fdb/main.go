@@ -12,7 +12,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var VerboseFlag bool
+var (
+	VerboseFlag  bool
+	ExcludeTable string
+)
 
 type verboseWriter struct{}
 
@@ -29,9 +32,15 @@ var (
 	Verbose = log.New(&verboseWriter{}, "gd-fdb: ", 0)
 )
 
+type Exclude struct {
+	All     bool
+	Columns []string
+}
+
 type Converter interface {
-	WriteFdb(io.WriteSeeker) error
+	WriteFdb(w io.WriteSeeker, exclude map[string]*Exclude) error
 	WriteDb(*fdb.DB) error
+	GetExcludeTable(tableName string) (map[string]*Exclude, error)
 }
 
 var DriverName string
@@ -69,6 +78,7 @@ func GetConverter(driverName, dsn string) (Converter, error) {
 func main() {
 	flagset := flag.NewFlagSet("gb-fdb", flag.ExitOnError)
 	flagset.BoolVar(&VerboseFlag, "v", false, "Enable verbose logging.")
+	flagset.StringVar(&ExcludeTable, "excludeTable", "", "The name of the table that indicates which columns to exclude when converting to FDB. The game originally used the DBExclude table. See: https://docs.lu-dev.net/en/latest/database/DBExclude.html")
 	flagset.StringVar(&DriverName, "driver", "sqlite3", "Supported drivers: sqlite3")
 	flagset.Usage = usage(flagset)
 
@@ -96,6 +106,15 @@ func main() {
 			Error.Fatal(err)
 		}
 
+		excludes := make(map[string]*Exclude)
+		if len(ExcludeTable) > 0 {
+			e, err := converter.GetExcludeTable(ExcludeTable)
+			if err != nil {
+				Error.Fatal(err)
+			}
+			excludes = e
+		}
+
 		Verbose.Printf("Converting %s (%s) to %s", DriverName, input, output)
 
 		file, err := os.Create(output)
@@ -104,7 +123,7 @@ func main() {
 		}
 		defer file.Close()
 
-		if err := converter.WriteFdb(file); err != nil {
+		if err := converter.WriteFdb(file, excludes); err != nil {
 			Error.Fatal(err)
 		}
 	case "fromFdb":

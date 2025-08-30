@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/I-Am-Dench/goverbuild/database/fdb"
@@ -19,11 +20,11 @@ func NewSqlite(db *sql.DB) Converter {
 
 func (db *Sqlite) toVariant(colType string) (fdb.Variant, bool) {
 	switch strings.ToUpper(colType) {
-	case "INT32":
+	case "INT", "INT32":
 		return fdb.VariantI32, true
 	case "REAL":
 		return fdb.VariantReal, true
-	case "TEXT4":
+	case "TEXT", "TEXT4":
 		return fdb.VariantNVarChar, true
 	case "INT_BOOL":
 		return fdb.VariantBool, true
@@ -57,7 +58,7 @@ func (db *Sqlite) toColType(variant fdb.Variant) (string, bool) {
 	}
 }
 
-func (db *Sqlite) queryTable(name string) (*fdb.Table, error) {
+func (db *Sqlite) queryTable(name string, exclude *Exclude) (*fdb.Table, error) {
 	query := "SELECT name, type, pk FROM pragma_table_info(?)"
 	Verbose.Print(name, ": ", query)
 
@@ -85,6 +86,11 @@ func (db *Sqlite) queryTable(name string) (*fdb.Table, error) {
 			return nil, fmt.Errorf("%s: unknown column type: %s", colName, colType)
 		}
 
+		if exclude != nil && slices.Contains(exclude.Columns, colName) {
+			Verbose.Print(name, ": excluding column \"", colName, "\"")
+			continue
+		}
+
 		table.Columns = append(table.Columns, &fdb.Column{
 			Variant: variant,
 			Name:    colName,
@@ -94,7 +100,7 @@ func (db *Sqlite) queryTable(name string) (*fdb.Table, error) {
 	return table, nil
 }
 
-func (db *Sqlite) collectTables() ([]*fdb.Table, error) {
+func (db *Sqlite) collectTables(excludes map[string]*Exclude) ([]*fdb.Table, error) {
 	query := "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
 	Verbose.Println(query)
 
@@ -109,12 +115,19 @@ func (db *Sqlite) collectTables() ([]*fdb.Table, error) {
 		if err := rows.Scan(&name); err != nil {
 			return nil, fmt.Errorf("collect tables: %v", err)
 		}
+
+		exclude, ok := excludes[name]
+		if ok && exclude.All {
+			Verbose.Print("excluding table \"", name, "\"")
+			continue
+		}
+
 		names = append(names, name)
 	}
 
 	tables := []*fdb.Table{}
 	for _, name := range names {
-		table, err := db.queryTable(name)
+		table, err := db.queryTable(name, excludes[name])
 		if err != nil {
 			return nil, fmt.Errorf("collect tables: query table: %s: %v", name, err)
 		}
@@ -161,8 +174,8 @@ func (db *Sqlite) scanRow(rows *sql.Rows, columns []*fdb.Column) (fdb.Row, error
 	return row, nil
 }
 
-func (db *Sqlite) WriteFdb(w io.WriteSeeker) error {
-	tables, err := db.collectTables()
+func (db *Sqlite) WriteFdb(w io.WriteSeeker, excludes map[string]*Exclude) error {
+	tables, err := db.collectTables(excludes)
 	if err != nil {
 		return fmt.Errorf("sqlite3: %v", err)
 	}
@@ -313,4 +326,37 @@ func (db *Sqlite) WriteDb(f *fdb.DB) error {
 	}
 
 	return nil
+}
+
+func (db *Sqlite) GetExcludeTable(tableName string) (map[string]*Exclude, error) {
+	excludes := make(map[string]*Exclude)
+
+	query := fmt.Sprint("SELECT \"table\", \"column\" FROM ", tableName)
+	Verbose.Println(query)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var name, column string
+		if err := rows.Scan(&name, &column); err != nil {
+			return nil, err
+		}
+
+		exclude, ok := excludes[name]
+		if !ok {
+			exclude = &Exclude{}
+			excludes[name] = exclude
+		}
+
+		if column == "*" {
+			exclude.All = true
+		} else {
+			exclude.Columns = append(exclude.Columns, column)
+		}
+	}
+
+	return excludes, nil
 }
