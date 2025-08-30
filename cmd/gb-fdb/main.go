@@ -12,6 +12,23 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+var VerboseFlag bool
+
+type verboseWriter struct{}
+
+func (v *verboseWriter) Write(b []byte) (int, error) {
+	if VerboseFlag {
+		return os.Stdout.Write(b)
+	} else {
+		return len(b), nil
+	}
+}
+
+var (
+	Error   = log.New(os.Stderr, "gd-fdb: ", 0)
+	Verbose = log.New(&verboseWriter{}, "gd-fdb: ", 0)
+)
+
 type Converter interface {
 	WriteFdb(io.WriteSeeker) error
 	WriteDb(*fdb.DB) error
@@ -50,10 +67,8 @@ func GetConverter(driverName, dsn string) (Converter, error) {
 }
 
 func main() {
-	log.SetFlags(0)
-	log.SetPrefix("gb-fdb: ")
-
 	flagset := flag.NewFlagSet("gb-fdb", flag.ExitOnError)
+	flagset.BoolVar(&VerboseFlag, "v", false, "Enable verbose logging.")
 	flagset.StringVar(&DriverName, "driver", "sqlite3", "Supported drivers: sqlite3")
 	flagset.Usage = usage(flagset)
 
@@ -68,7 +83,7 @@ func main() {
 	case "toFdb":
 		input := flagset.Arg(0)
 		if len(input) == 0 {
-			log.Fatal("missing database DSN")
+			Error.Fatal("missing database DSN")
 		}
 
 		output := flagset.Arg(1)
@@ -78,22 +93,24 @@ func main() {
 
 		converter, err := GetConverter(DriverName, input)
 		if err != nil {
-			log.Fatal(err)
+			Error.Fatal(err)
 		}
+
+		Verbose.Printf("Converting %s (%s) to %s", DriverName, input, output)
 
 		file, err := os.Create(output)
 		if err != nil {
-			log.Fatal(err)
+			Error.Fatal(err)
 		}
 		defer file.Close()
 
 		if err := converter.WriteFdb(file); err != nil {
-			log.Fatal(err)
+			Error.Fatal(err)
 		}
 	case "fromFdb":
 		output := flagset.Arg(0)
 		if len(output) == 0 {
-			log.Fatal("missing database DSN")
+			Error.Fatal("missing database DSN")
 		}
 
 		input := flagset.Arg(1)
@@ -103,18 +120,20 @@ func main() {
 
 		converter, err := GetConverter(DriverName, output)
 		if err != nil {
-			log.Fatal(err)
+			Error.Fatal(err)
 		}
+
+		Verbose.Printf("Converting %s to %s (%s)", input, DriverName, output)
 
 		db, err := fdb.Open(input)
 		if err != nil {
-			log.Fatal(err)
+			Error.Fatal(err)
 		}
 
 		if err := converter.WriteDb(db); err != nil {
-			log.Fatal(err)
+			Error.Fatal(err)
 		}
 	default:
-		log.Fatalf("unknown subcommand: %s", subcommand)
+		Error.Fatalf("unknown subcommand: %s", subcommand)
 	}
 }

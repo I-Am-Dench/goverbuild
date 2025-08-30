@@ -29,7 +29,7 @@ func (db *Sqlite) toVariant(colType string) (fdb.Variant, bool) {
 		return fdb.VariantBool, true
 	case "INT64":
 		return fdb.VariantI64, true
-	case "TEXT8", "TEXT_XML", "BLOB_NONE":
+	case "TEXT8", "TEXT_XML", "BLOB", "BLOB_NONE":
 		return fdb.VariantText, true
 	default:
 		return fdb.VariantNull, false
@@ -58,7 +58,10 @@ func (db *Sqlite) toColType(variant fdb.Variant) (string, bool) {
 }
 
 func (db *Sqlite) queryTable(name string) (*fdb.Table, error) {
-	rows, err := db.Query("SELECT name, type, pk FROM pragma_table_info(?)", name)
+	query := "SELECT name, type, pk FROM pragma_table_info(?)"
+	Verbose.Print(name, ": ", query)
+
+	rows, err := db.Query(query, name)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +95,10 @@ func (db *Sqlite) queryTable(name string) (*fdb.Table, error) {
 }
 
 func (db *Sqlite) collectTables() ([]*fdb.Table, error) {
-	rows, err := db.Query("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+	query := "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+	Verbose.Println(query)
+
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("collect tables: %v", err)
 	}
@@ -131,6 +137,7 @@ func (db *Sqlite) queryRows(table *fdb.Table) (*sql.Rows, error) {
 	}
 
 	query := fmt.Sprint("SELECT ", colNames.String(), " FROM ", table.Name)
+	Verbose.Println(query)
 	return db.Query(query)
 }
 
@@ -202,7 +209,10 @@ func (db *Sqlite) dropTables(tables []*fdb.Table) error {
 	defer tx.Rollback()
 
 	for _, table := range tables {
-		if _, err := tx.Exec(fmt.Sprint("DROP TABLE IF EXISTS ", table.Name)); err != nil {
+		query := fmt.Sprint("DROP TABLE IF EXISTS ", table.Name)
+		Verbose.Print(query)
+
+		if _, err := tx.Exec(query); err != nil {
 			return fmt.Errorf("drop %s: %v", table.Name, err)
 		}
 	}
@@ -254,8 +264,10 @@ func (db *Sqlite) createTable(table *fdb.Table) error {
 		colNames.WriteString(colType)
 	}
 
-	query := fmt.Sprint("CREATE TABLE ", table.Name, " (", colNames.String(), ")")
-	if _, err := tx.Exec(query); err != nil {
+	createQuery := fmt.Sprint("CREATE TABLE ", table.Name, " (", colNames.String(), ")")
+	Verbose.Println(createQuery)
+
+	if _, err := tx.Exec(createQuery); err != nil {
 		return err
 	}
 
@@ -265,6 +277,7 @@ func (db *Sqlite) createTable(table *fdb.Table) error {
 	}
 
 	insertQuery := fmt.Sprint("INSERT INTO ", table.Name, " VALUES (", placeholders.String(), ")")
+	Verbose.Println(insertQuery)
 
 	values := make([]any, len(table.Columns))
 	for rows.Next() {
@@ -298,10 +311,6 @@ func (db *Sqlite) WriteDb(f *fdb.DB) error {
 			return fmt.Errorf("create table %s: %v", table.Name, err)
 		}
 	}
-
-	// if err := db.createTable(f.Tables()[0]); err != nil {
-	// 	return err
-	// }
 
 	return nil
 }
