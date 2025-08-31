@@ -20,7 +20,7 @@ func NewSqlite(db *sql.DB) Converter {
 
 func (db *Sqlite) toVariant(colType string) (fdb.Variant, bool) {
 	switch strings.ToUpper(colType) {
-	case "INT", "INT32":
+	case "INTEGER", "INT", "INT32":
 		return fdb.VariantI32, true
 	case "REAL":
 		return fdb.VariantReal, true
@@ -58,6 +58,12 @@ func (db *Sqlite) toColType(variant fdb.Variant) (string, bool) {
 	}
 }
 
+func moveToFront(columns []*fdb.Column, i int) {
+	for j := i - 1; j >= 0; j-- {
+		columns[j], columns[j+1] = columns[j+1], columns[j]
+	}
+}
+
 func (db *Sqlite) queryTable(name string, exclude *Exclude) (*fdb.Table, error) {
 	query := "SELECT name, type, pk FROM pragma_table_info(?)"
 	Verbose.Print(name, ": ", query)
@@ -66,6 +72,9 @@ func (db *Sqlite) queryTable(name string, exclude *Exclude) (*fdb.Table, error) 
 	if err != nil {
 		return nil, err
 	}
+
+	primaryKeyIndex := -1
+	i := 0
 
 	table := &fdb.Table{
 		Name:    name,
@@ -88,6 +97,7 @@ func (db *Sqlite) queryTable(name string, exclude *Exclude) (*fdb.Table, error) 
 
 		if exclude != nil && slices.Contains(exclude.Columns, colName) {
 			Verbose.Print(name, ": excluding column \"", colName, "\"")
+			i++
 			continue
 		}
 
@@ -95,6 +105,16 @@ func (db *Sqlite) queryTable(name string, exclude *Exclude) (*fdb.Table, error) 
 			Variant: variant,
 			Name:    colName,
 		})
+
+		if primaryKeyIndex < 0 && isPrimaryKey {
+			Verbose.Print("Found primary key \"", colName, "\"")
+			primaryKeyIndex = i
+		}
+		i++
+	}
+
+	if primaryKeyIndex > 0 {
+		moveToFront(table.Columns, primaryKeyIndex)
 	}
 
 	return table, nil

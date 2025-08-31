@@ -128,7 +128,7 @@ func (r *Row) Id() (int, error) {
 	entry := (*r)[0]
 	switch entry.Variant() {
 	case VariantNull:
-		return 0, ErrNullData
+		return 0, fmt.Errorf("row id: %w", ErrNullData)
 	case VariantI32:
 		return int(entry.Int32()), nil
 	case VariantU32:
