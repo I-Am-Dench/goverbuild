@@ -39,7 +39,7 @@ type Exclude struct {
 
 type Converter interface {
 	WriteFdb(w io.WriteSeeker, exclude map[string]*Exclude) error
-	WriteDb(*fdb.DB) error
+	ReadFdb(*fdb.Reader) error
 	GetExcludeTable(tableName string) (map[string]*Exclude, error)
 }
 
@@ -144,12 +144,12 @@ func main() {
 
 		Verbose.Printf("Converting %s to %s (%s)", input, DriverName, output)
 
-		db, err := fdb.Open(input)
+		r, err := fdb.Open(input)
 		if err != nil {
 			Error.Fatal(err)
 		}
 
-		if err := converter.WriteDb(db); err != nil {
+		if err := converter.ReadFdb(r); err != nil {
 			Error.Fatal(err)
 		}
 	default:

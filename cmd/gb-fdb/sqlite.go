@@ -277,12 +277,12 @@ func (db *Sqlite) createTable(table *fdb.Table) error {
 	return nil
 }
 
-func (db *Sqlite) WriteDb(f *fdb.DB) error {
-	if err := db.dropTables(f.Tables()); err != nil {
+func (db *Sqlite) ReadFdb(r *fdb.Reader) error {
+	if err := db.dropTables(r.Tables()); err != nil {
 		return err
 	}
 
-	for _, table := range f.Tables() {
+	for _, table := range r.Tables() {
 		if err := db.createTable(table); err != nil {
 			return fmt.Errorf("create table %s: %v", table.Name, err)
 		}

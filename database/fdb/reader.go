@@ -24,18 +24,19 @@ func (t *Table) HashTable() *HashTable {
 	return t.hashTable
 }
 
-type DB struct {
-	f *os.File
+type Reader struct {
+	f      *os.File
+	closer bool
 
 	tables []*Table
 }
 
-func (db *DB) Tables() []*Table {
-	return db.tables
+func (r *Reader) Tables() []*Table {
+	return r.tables
 }
 
-func (db *DB) FindTable(name string) (*Table, bool) {
-	for _, table := range db.tables {
+func (r *Reader) FindTable(name string) (*Table, bool) {
+	for _, table := range r.tables {
 		if table.Name == name {
 			return table, true
 		}
@@ -43,8 +44,8 @@ func (db *DB) FindTable(name string) (*Table, bool) {
 	return nil, false
 }
 
-func (db *DB) readColumns(r io.ReadSeeker, offset uint32, numColumns int) ([]*Column, error) {
-	if _, err := r.Seek(int64(offset), io.SeekStart); err != nil {
+func (r *Reader) readColumns(rs io.ReadSeeker, offset uint32, numColumns int) ([]*Column, error) {
+	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("read columns: %w", err)
 	}
 
@@ -54,8 +55,8 @@ func (db *DB) readColumns(r io.ReadSeeker, offset uint32, numColumns int) ([]*Co
 	}, numColumns)
 	for i := range columnData {
 		if err := errors.Join(
-			binary.Read(r, order, &columnData[i].DataType),
-			binary.Read(r, order, &columnData[i].NamePointer),
+			binary.Read(rs, order, &columnData[i].DataType),
+			binary.Read(rs, order, &columnData[i].NamePointer),
 		); err != nil {
 			return nil, fmt.Errorf("read columns: %w", err)
 		}
@@ -63,11 +64,11 @@ func (db *DB) readColumns(r io.ReadSeeker, offset uint32, numColumns int) ([]*Co
 
 	columns := make([]*Column, numColumns)
 	for i, data := range columnData {
-		if _, err := r.Seek(int64(data.NamePointer), io.SeekStart); err != nil {
+		if _, err := rs.Seek(int64(data.NamePointer), io.SeekStart); err != nil {
 			return nil, fmt.Errorf("read columns: %w", err)
 		}
 
-		name, err := ReadZString(r)
+		name, err := ReadZString(rs)
 		if err != nil {
 			return nil, fmt.Errorf("read columns: %w", err)
 		}
@@ -81,8 +82,8 @@ func (db *DB) readColumns(r io.ReadSeeker, offset uint32, numColumns int) ([]*Co
 	return columns, nil
 }
 
-func (db *DB) readHashTable(r io.ReadSeeker, offset uint32) (*HashTable, error) {
-	if _, err := r.Seek(int64(offset), io.SeekStart); err != nil {
+func (r *Reader) readHashTable(rs io.ReadSeeker, offset uint32) (*HashTable, error) {
+	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("read hash table: %w", err)
 	}
 
@@ -91,21 +92,21 @@ func (db *DB) readHashTable(r io.ReadSeeker, offset uint32) (*HashTable, error) 
 		bucketsOffset uint32
 	)
 	if err := errors.Join(
-		binary.Read(r, order, &numBuckets),
-		binary.Read(r, order, &bucketsOffset),
+		binary.Read(rs, order, &numBuckets),
+		binary.Read(rs, order, &bucketsOffset),
 	); err != nil {
 		return nil, fmt.Errorf("read hash table: %w", err)
 	}
 
 	return &HashTable{
-		r:          r,
+		r:          rs,
 		base:       int64(bucketsOffset),
 		numBuckets: int(numBuckets),
 	}, nil
 }
 
-func (db *DB) readTable(r io.ReadSeeker, description, hashTable uint32) (*Table, error) {
-	if _, err := r.Seek(int64(description), io.SeekStart); err != nil {
+func (r *Reader) readTable(rs io.ReadSeeker, description, hashTable uint32) (*Table, error) {
+	if _, err := rs.Seek(int64(description), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("read table: %w", err)
 	}
 
@@ -116,28 +117,28 @@ func (db *DB) readTable(r io.ReadSeeker, description, hashTable uint32) (*Table,
 	)
 
 	if err := errors.Join(
-		binary.Read(r, order, &numColumns),
-		binary.Read(r, order, &namePointer),
-		binary.Read(r, order, &columnOffset),
+		binary.Read(rs, order, &numColumns),
+		binary.Read(rs, order, &namePointer),
+		binary.Read(rs, order, &columnOffset),
 	); err != nil {
 		return nil, fmt.Errorf("read table: %w", err)
 	}
 
-	if _, err := r.Seek(int64(namePointer), io.SeekStart); err != nil {
+	if _, err := rs.Seek(int64(namePointer), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("read table: %w", err)
 	}
 
-	name, err := ReadZString(r)
+	name, err := ReadZString(rs)
 	if err != nil {
 		return nil, fmt.Errorf("read table: %w", err)
 	}
 
-	columns, err := db.readColumns(r, columnOffset, int(numColumns))
+	columns, err := r.readColumns(rs, columnOffset, int(numColumns))
 	if err != nil {
 		return nil, fmt.Errorf("read table: %w", err)
 	}
 
-	ht, err := db.readHashTable(r, hashTable)
+	ht, err := r.readHashTable(rs, hashTable)
 	if err != nil {
 		return nil, fmt.Errorf("read table: %w", err)
 	}
@@ -149,63 +150,76 @@ func (db *DB) readTable(r io.ReadSeeker, description, hashTable uint32) (*Table,
 	}, nil
 }
 
-func (db *DB) init() error {
+func (r *Reader) init() error {
 	var (
 		numTables,
 		tablesOffset uint32
 	)
 
 	if err := errors.Join(
-		binary.Read(db.f, order, &numTables),
-		binary.Read(db.f, order, &tablesOffset),
+		binary.Read(r.f, order, &numTables),
+		binary.Read(r.f, order, &tablesOffset),
 	); err != nil {
 		return fmt.Errorf("init: %v", err)
 	}
 
-	if _, err := db.f.Seek(int64(tablesOffset), io.SeekStart); err != nil {
+	if _, err := r.f.Seek(int64(tablesOffset), io.SeekStart); err != nil {
 		return fmt.Errorf("init: tables offset: %v", err)
 	}
 
 	tableOffsets := make([]struct{ Description, HashTable uint32 }, numTables)
 	for i := range tableOffsets {
 		if err := errors.Join(
-			binary.Read(db.f, order, &tableOffsets[i].Description),
-			binary.Read(db.f, order, &tableOffsets[i].HashTable),
+			binary.Read(r.f, order, &tableOffsets[i].Description),
+			binary.Read(r.f, order, &tableOffsets[i].HashTable),
 		); err != nil {
 			return fmt.Errorf("init: table offsets: %v", err)
 		}
 	}
 
 	for _, offsets := range tableOffsets {
-		table, err := db.readTable(db.f, offsets.Description, offsets.HashTable)
+		table, err := r.readTable(r.f, offsets.Description, offsets.HashTable)
 		if err != nil {
 			return fmt.Errorf("init: %v", err)
 		}
 
-		db.tables = append(db.tables, table)
+		r.tables = append(r.tables, table)
 	}
 
 	return nil
 }
 
-func (db *DB) Close() error {
-	return db.f.Close()
+func (r *Reader) Close() error {
+	if r.closer {
+		return r.f.Close()
+	}
+	return nil
 }
 
-func Open(name string) (*DB, error) {
+func New(file *os.File) (*Reader, error) {
+	r := &Reader{
+		f:      file,
+		tables: []*Table{},
+	}
+	if err := r.init(); err != nil {
+		return nil, fmt.Errorf("fdb: %v", err)
+	}
+
+	return r, nil
+}
+
+func Open(name string) (*Reader, error) {
 	file, err := os.Open(name)
 	if err != nil {
 		return nil, fmt.Errorf("fdb: %w", err)
 	}
 
-	db := &DB{
-		f: file,
-
-		tables: []*Table{},
-	}
-	if err := db.init(); err != nil {
+	r, err := New(file)
+	if err != nil {
+		file.Close()
 		return nil, fmt.Errorf("fdb: %v", err)
 	}
+	r.closer = true
 
-	return db, nil
+	return r, nil
 }
