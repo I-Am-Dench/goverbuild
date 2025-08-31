@@ -158,42 +158,6 @@ func (db *Sqlite) collectTables(excludes map[string]*Exclude) ([]*fdb.Table, err
 	return tables, nil
 }
 
-func (db *Sqlite) queryRows(table *fdb.Table) (*sql.Rows, error) {
-	colNames := strings.Builder{}
-	for i, col := range table.Columns {
-		if i > 0 {
-			colNames.WriteRune(',')
-		}
-		colNames.WriteRune('"')
-		colNames.WriteString(col.Name)
-		colNames.WriteRune('"')
-	}
-
-	query := fmt.Sprint("SELECT ", colNames.String(), " FROM ", table.Name)
-	Verbose.Println(query)
-	return db.Query(query)
-}
-
-func (db *Sqlite) scanRow(rows *sql.Rows, columns []*fdb.Column) (fdb.Row, error) {
-	row := fdb.Row{}
-	for _, col := range columns {
-		row = append(row, &dataEntry{
-			variant: col.Variant,
-		})
-	}
-
-	entries := make([]any, len(row))
-	for i := range row {
-		entries[i] = row[i]
-	}
-
-	if err := rows.Scan(entries...); err != nil {
-		return nil, err
-	}
-
-	return row, nil
-}
-
 func (db *Sqlite) WriteFdb(w io.WriteSeeker, excludes map[string]*Exclude) error {
 	tables, err := db.collectTables(excludes)
 	if err != nil {
@@ -206,28 +170,7 @@ func (db *Sqlite) WriteFdb(w io.WriteSeeker, excludes map[string]*Exclude) error
 	}
 
 	builder := fdb.NewBuilder(tables)
-	if err := builder.FlushTo(w, func(tableName string) func() (row fdb.Row, err error) {
-		table := byName[tableName]
-
-		rows, err := db.queryRows(table)
-		if err != nil {
-			return func() (fdb.Row, error) {
-				return nil, fmt.Errorf("%s: %v", table.Name, err)
-			}
-		}
-
-		return func() (row fdb.Row, err error) {
-			if rows.Next() {
-				return db.scanRow(rows, table.Columns)
-			}
-
-			if rows.Err() != nil {
-				return nil, rows.Err()
-			}
-
-			return nil, io.EOF
-		}
-	}); err != nil {
+	if err := builder.FlushTo(w, IterTables(db.DB, byName)); err != nil {
 		return fmt.Errorf("sqlite3: %v", err)
 	}
 

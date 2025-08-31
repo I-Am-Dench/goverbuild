@@ -1,6 +1,6 @@
 module github.com/I-Am-Dench/goverbuild
 
-go 1.21.0
+go 1.23.0
 
 require github.com/snksoft/crc v1.1.0
 

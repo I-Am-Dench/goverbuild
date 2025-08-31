@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"iter"
 	"slices"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 
 type writer = deferredwriter.Writer
 
-type RowsFunc func(tableName string) func() (row Row, err error)
+type RowsFunc func(tableName string) iter.Seq2[Row, error]
 
 type Builder struct {
 	tables []*Table
@@ -67,10 +68,11 @@ func (b *Builder) collectBuckets(table *Table, f RowsFunc) ([][]Row, error) {
 
 	rowsById := make(map[uint32][]Row)
 
-	iter := f(table.Name)
+	for row, err := range f(table.Name) {
+		if err != nil {
+			return nil, err
+		}
 
-	row, err := iter()
-	for ; err == nil; row, err = iter() {
 		if len(table.Columns) != len(row) {
 			return nil, fmt.Errorf("%s: mismatched columns: expected %d columns but got %d", table.Name, len(table.Columns), len(row))
 		}
@@ -82,10 +84,6 @@ func (b *Builder) collectBuckets(table *Table, f RowsFunc) ([][]Row, error) {
 
 		rows := rowsById[uint32(key)]
 		rowsById[uint32(key)] = append(rows, row)
-	}
-
-	if err != io.EOF {
-		return nil, err
 	}
 
 	buckets := make([][]Row, bitCeil(len(rowsById)))
