@@ -169,8 +169,8 @@ func (db *Sqlite) WriteFdb(w io.WriteSeeker, excludes map[string]*Exclude) error
 		byName[table.Name] = table
 	}
 
-	builder := fdb.NewBuilder(tables)
-	if err := builder.FlushTo(w, IterTables(db.DB, byName)); err != nil {
+	builder := fdb.NewBuilder(w, tables)
+	if err := builder.Flush(IterTables(db.DB, byName)); err != nil {
 		return fmt.Errorf("sqlite3: %v", err)
 	}
 

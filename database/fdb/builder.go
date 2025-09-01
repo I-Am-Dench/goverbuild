@@ -13,18 +13,31 @@ import (
 
 type writer = deferredwriter.Writer
 
-type RowsFunc func(tableName string) iter.Seq2[Row, error]
+// A function that returns an [iter.Seq2] for the
+// rows corresponding to the tableName.
+//
+// If an error would be returned by the sequence, it should
+// yield the error and then stop the sequence.
+type RowsFunc = func(tableName string) iter.Seq2[Row, error]
 
+// File type: [fdb]
+//
+// [fdb]: https://docs.lu-dev.net/en/latest/file-structures/database.html
 type Builder struct {
+	w      io.WriteSeeker
 	tables []*Table
 }
 
-func NewBuilder(tables []*Table) *Builder {
+// Creates a [*Builder] with the provided [io.WriteSeeker]
+// and list of [*Table]'s. The provided tables are lexographically
+// sorted by their names.
+func NewBuilder(w io.WriteSeeker, tables []*Table) *Builder {
 	slices.SortFunc(tables, func(a, b *Table) int {
 		return strings.Compare(a.Name, b.Name)
 	})
 
 	return &Builder{
+		w:      w,
 		tables: tables,
 	}
 }
@@ -227,18 +240,24 @@ func (b *Builder) writeRows(w *writer, table *Table, rows RowsFunc) error {
 	return nil
 }
 
-func (b *Builder) FlushTo(w io.WriteSeeker, rows RowsFunc) error {
-	n, err := w.Seek(0, io.SeekCurrent)
+// Writes the table descriptions and rows to the
+// underlying [io.WriteSeeker].
+//
+// The first [Entry] in a [Row], returned by the [iter.Seq2]
+// of the provided [RowsFunc], MUST NOT have a variant
+// equal to [VariantNull].
+func (b *Builder) Flush(rows RowsFunc) error {
+	n, err := b.w.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return err
 	}
 	tableOffset := uint32(n) + 4
 
-	if err := binary.Write(w, order, uint32(len(b.tables))); err != nil {
+	if err := binary.Write(b.w, order, uint32(len(b.tables))); err != nil {
 		return fmt.Errorf("flush to: num tables: %v", err)
 	}
 
-	dw := deferredwriter.New(w, order, tableOffset)
+	dw := deferredwriter.New(b.w, order, tableOffset)
 
 	writeDescription := true
 	if err := dw.DeferredArray(len(b.tables)*2, func(w *writer, i int) (bool, error) {

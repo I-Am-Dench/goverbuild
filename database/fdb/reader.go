@@ -24,6 +24,9 @@ func (t *Table) HashTable() *HashTable {
 	return t.hashTable
 }
 
+// File type: [fdb]
+//
+// [fdb]: https://docs.lu-dev.net/en/latest/file-structures/database.html
 type Reader struct {
 	f      *os.File
 	closer bool
@@ -189,6 +192,8 @@ func (r *Reader) init() error {
 	return nil
 }
 
+// Closes the underlying [*os.File] only if the Reader
+// was created by a call to [Open].
 func (r *Reader) Close() error {
 	if r.closer {
 		return r.f.Close()
@@ -196,6 +201,7 @@ func (r *Reader) Close() error {
 	return nil
 }
 
+// Creates a [*Reader] with the provided [*os.File].
 func New(file *os.File) (*Reader, error) {
 	r := &Reader{
 		f:      file,
@@ -208,6 +214,7 @@ func New(file *os.File) (*Reader, error) {
 	return r, nil
 }
 
+// Creates a [*Reader] with the named [*os.File].
 func Open(name string) (*Reader, error) {
 	file, err := os.Open(name)
 	if err != nil {

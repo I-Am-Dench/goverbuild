@@ -120,6 +120,21 @@ func (r *Row) Value(i int) (any, error) {
 	}
 }
 
+// Returns an int representing the first [Entry]
+// of the row.
+//
+// If the variant is a
+//
+//   - [VariantNVarChar] or [VariantText], Id returns the [Sfhash]
+//     of the string's bytes.
+//   - [VariantBool], Id returns 1 if true and 0 if false
+//   - [VariantReal], Id returns the underlying float32's bytes
+//     as an int
+//
+// Otherwise, Id returns the [Entry]'s value casted to an int.
+//
+// Id returns an error if the variant is unrecognized or if the
+// the variant is equal to [VariantNull].
 func (r *Row) Id() (int, error) {
 	if len(*r) == 0 {
 		panic(fmt.Errorf("fdb: row: id: no entries"))
