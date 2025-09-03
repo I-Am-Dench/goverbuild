@@ -16,6 +16,7 @@ const (
 	noData uint32 = 0xffffffff
 )
 
+// Represents a single linked list of buckets.
 type Bucket struct {
 	r io.ReadSeeker
 
@@ -79,6 +80,7 @@ func (b *Bucket) readRow(r io.ReadSeeker) (row Row, nextOffset uint32, err error
 	return Row(entries), nextOffset, nil
 }
 
+// Advances to the next [Row].
 func (b *Bucket) Next() bool {
 	if b.finished {
 		b.err = nil
@@ -99,6 +101,7 @@ func (b *Bucket) Err() error {
 	return b.err
 }
 
+// Resets to the first bucket in the linked list.
 func (b *Bucket) Reset() error {
 	b.finished = false
 	b.next = uint32(b.base)
@@ -108,6 +111,7 @@ func (b *Bucket) Reset() error {
 	return nil
 }
 
+// Represents all rows within a [*HashTable].
 type Rows struct {
 	r io.ReadSeeker
 
@@ -120,6 +124,9 @@ type Rows struct {
 	err error
 }
 
+// Returns the [*Bucket] located at index, i. Bucket panics
+// if i >= # of buckets. If no bucket exists at i, Bucket returns
+// an [ErrNullData] error.
 func (r *Rows) Bucket(i int) (*Bucket, error) {
 	if i >= r.numBuckets {
 		panic(fmt.Errorf("fdb: rows: bucket: out of range: %d", i))
@@ -167,6 +174,7 @@ func (r *Rows) nextBucket() (*Bucket, error) {
 	return bucket, nil
 }
 
+// Advances to the next [Row].
 func (r *Rows) Next() bool {
 	if r.bucketIndex >= r.numBuckets {
 		return false
@@ -232,12 +240,37 @@ func (r *Rows) Err() error {
 	return r.bucket.Err()
 }
 
+// FDB tables store their rows within hash tables
+// where each hash table contains an array of linked lists
+// of [Bucket]'s. Each bucket then contains a pointer
+// to row data.
+//
+//	+-------+-------+-------+-------+-------+
+//	|   0   |   1   |   2   |   3   |   4   |
+//	+-------+-------+-------+-------+-------+
+//	    |                       |
+//	    V                       V
+//	+-------+               +-------+
+//	| ID: 0 | -> <row data> | ID: 8 | -> <row data>
+//	+-------+               +-------+
+//	    |
+//	    V
+//	+-------+
+//	| ID: 5 | -> <row data>
+//	+-------+
+//
+// Each row is identified by the first column's value
+// converted to an integer. The bucket linked list that
+// contains the row is then located at the index: ID % the # of rows.
 type HashTable struct {
 	r          io.ReadSeeker
 	base       int64
 	numBuckets int
 }
 
+// Returns the [*Bucket] located at index, i. Bucket panics
+// if i >= # of buckets. If no bucket exists at i, Bucket returns
+// an [ErrNullData] error.
 func (h *HashTable) Bucket(i int) (*Bucket, error) {
 	if i >= h.numBuckets {
 		panic(fmt.Errorf("fdb: hash table: bucket: out of range: %d", i))
@@ -267,6 +300,8 @@ func (h *HashTable) Bucket(i int) (*Bucket, error) {
 	return b, nil
 }
 
+// Returns the first row corresponding to the provided id.
+// If no row exists, Find returns a wrapped [ErrRowNotFound] error.
 func (h *HashTable) Find(id int) (Row, error) {
 	bucket, err := h.Bucket(id % h.numBuckets)
 	if errors.Is(err, ErrNullData) {
@@ -297,6 +332,7 @@ func (h *HashTable) Find(id int) (Row, error) {
 	return nil, fmt.Errorf("hash table: %w", ErrRowNotFound)
 }
 
+// Returns the first row corresponding to the provided id.
 func (h *HashTable) FindString(id string) (Row, error) {
 	return h.Find(int(Sfhash([]byte(id))))
 }

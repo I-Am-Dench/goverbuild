@@ -99,8 +99,8 @@ func bitCeil(n int) int {
 }
 
 // THE CODE BELOW HAS BEEN TRANSLATE FROM THE FOLLOWING RESOURCES:
-// - Original implementation: https://www.azillionmonkeys.com/qed/hash.html
-// - Xiphoseer's implementation: https://docs.rs/sfhash/latest/src/sfhash/lib.rs.html
+//   - Original implementation: https://www.azillionmonkeys.com/qed/hash.html
+//   - Xiphoseer's implementation: https://docs.rs/sfhash/latest/src/sfhash/lib.rs.html
 func Sfhash(b []byte) uint32 {
 	if len(b) == 0 || b == nil {
 		return 0
