@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"os"
 )
 
@@ -22,6 +23,31 @@ type Table struct {
 
 func (t *Table) HashTable() *HashTable {
 	return t.hashTable
+}
+
+func (t *Table) Rows() iter.Seq2[Row, error] {
+	return func(yield func(Row, error) bool) {
+		if t.hashTable == nil {
+			return
+		}
+
+		rows, err := t.hashTable.Rows()
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
+		for rows.Next() {
+			if !yield(rows.Row(), nil) {
+				return
+			}
+		}
+
+		if err := rows.Err(); err != nil {
+			yield(nil, err)
+			return
+		}
+	}
 }
 
 // File type: [fdb]

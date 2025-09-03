@@ -159,61 +159,6 @@ func (c *FdbCsv) Flush() error {
 	return nil
 }
 
-// func tableRows(db *fdb.DB) fdb.RowsFunc {
-// 	return func(tableName string) func() (row fdb.Row, err error) {
-// 		table, ok := db.FindTable(tableName)
-// 		if !ok {
-// 			return func() (row fdb.Row, err error) { return nil, io.EOF }
-// 		}
-
-// 		rows, err := table.HashTable().Rows()
-// 		if err != nil {
-// 			return func() (row fdb.Row, err error) { return nil, err }
-// 		}
-
-// 		return func() (row fdb.Row, err error) {
-// 			if rows.Next() {
-// 				return rows.Row(), nil
-// 			}
-
-// 			if rows.Err() != nil {
-// 				return nil, rows.Err()
-// 			}
-
-// 			return nil, io.EOF
-// 		}
-// 	}
-// }
-
-// func fdbConvert(args []string) {
-// 	flagset := flag.NewFlagSet("fdb:convert", flag.ExitOnError)
-// 	flagset.Parse(args)
-
-// 	path := GetArgFilename(flagset, 0)
-
-// 	db, err := fdb.Open(path)
-// 	if errors.Is(err, os.ErrNotExist) {
-// 		log.Fatalf("file does not exist: %s", path)
-// 	}
-
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer db.Close()
-
-// 	f, err := os.OpenFile("cdclient.fdb", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	defer f.Close()
-
-// 	builder := fdb.NewBuilder(db.Tables())
-
-// 	if err := builder.FlushTo(f, tableRows(db)); err != nil {
-// 		log.Fatal(err)
-// 	}
-// }
-
 func fdbDump(args []string) {
 	flagset := flag.NewFlagSet("fdb:dump", flag.ExitOnError)
 	withColumnTypes := flagset.Bool("coltypes", false, "Show type information next to column name.")
@@ -251,17 +196,12 @@ func fdbDump(args []string) {
 		w = NewFdbTable(os.Stdout, table.Columns, *withColumnTypes)
 	}
 
-	rows, err := table.HashTable().Rows()
-	if err != nil {
-		log.Fatal(err)
-	}
+	for row, err := range table.Rows() {
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	for rows.Next() {
-		w.Row(rows.Row())
-	}
-
-	if rows.Err() != nil {
-		log.Fatal(rows.Err())
+		w.Row(row)
 	}
 
 	if !*asCsv {
