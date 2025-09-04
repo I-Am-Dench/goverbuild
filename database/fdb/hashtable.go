@@ -37,28 +37,24 @@ func (b *Bucket) readRow(r io.ReadSeeker) (row Row, nextOffset uint32, err error
 		return nil, 0, err
 	}
 
-	var rowDataOffset uint32
-	if err = errors.Join(
-		binary.Read(r, order, &rowDataOffset),
-		binary.Read(r, order, &nextOffset),
-	); err != nil {
+	data := [8]byte{}
+	if _, err := r.Read(data[:]); err != nil {
 		return nil, 0, err
 	}
+
+	rowDataOffset := order.Uint32(data[:])
+	nextOffset = order.Uint32(data[4:])
 
 	if _, err = r.Seek(int64(rowDataOffset), io.SeekStart); err != nil {
 		return nil, 0, err
 	}
 
-	var (
-		numColumns,
-		dataArrayOffset uint32
-	)
-	if err = errors.Join(
-		binary.Read(r, order, &numColumns),
-		binary.Read(r, order, &dataArrayOffset),
-	); err != nil {
+	if _, err := r.Read(data[:]); err != nil {
 		return nil, 0, err
 	}
+
+	numColumns := order.Uint32(data[:])
+	dataArrayOffset := order.Uint32(data[4:])
 
 	if _, err = r.Seek(int64(dataArrayOffset), io.SeekStart); err != nil {
 		return nil, 0, err
@@ -66,13 +62,13 @@ func (b *Bucket) readRow(r io.ReadSeeker) (row Row, nextOffset uint32, err error
 
 	entries := make([]Entry, numColumns)
 	for i := range entries {
-		e := &readerEntry{r: r}
-		if err := errors.Join(
-			binary.Read(r, order, &e.variant),
-			binary.Read(r, order, &e.data),
-		); err != nil {
+		if _, err := r.Read(data[:]); err != nil {
 			return nil, 0, err
 		}
+
+		e := &readerEntry{r: r}
+		e.variant = Variant(order.Uint32(data[:]))
+		e.data = order.Uint32(data[4:])
 
 		entries[i] = e
 	}

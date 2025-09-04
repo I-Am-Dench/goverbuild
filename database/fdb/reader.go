@@ -1,8 +1,6 @@
 package fdb
 
 import (
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -75,20 +73,22 @@ func (r *Reader) FindTable(name string) (*Table, bool) {
 
 func (r *Reader) readColumns(rs io.ReadSeeker, offset uint32, numColumns int) ([]*Column, error) {
 	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("read columns: %w", err)
+		return nil, fmt.Errorf("read columns: %v", err)
 	}
+
+	data := [8]byte{}
 
 	columnData := make([]struct {
 		DataType    Variant
 		NamePointer uint32
 	}, numColumns)
 	for i := range columnData {
-		if err := errors.Join(
-			binary.Read(rs, order, &columnData[i].DataType),
-			binary.Read(rs, order, &columnData[i].NamePointer),
-		); err != nil {
-			return nil, fmt.Errorf("read columns: %w", err)
+		if _, err := rs.Read(data[:]); err != nil {
+			return nil, fmt.Errorf("read columns: %v", err)
 		}
+
+		columnData[i].DataType = Variant(order.Uint32(data[:]))
+		columnData[i].NamePointer = order.Uint32(data[4:])
 	}
 
 	columns := make([]*Column, numColumns)
@@ -113,19 +113,16 @@ func (r *Reader) readColumns(rs io.ReadSeeker, offset uint32, numColumns int) ([
 
 func (r *Reader) readHashTable(rs io.ReadSeeker, offset uint32) (*HashTable, error) {
 	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("read hash table: %w", err)
+		return nil, fmt.Errorf("read hash table: %v", err)
 	}
 
-	var (
-		numBuckets,
-		bucketsOffset uint32
-	)
-	if err := errors.Join(
-		binary.Read(rs, order, &numBuckets),
-		binary.Read(rs, order, &bucketsOffset),
-	); err != nil {
-		return nil, fmt.Errorf("read hash table: %w", err)
+	data := [8]byte{}
+	if _, err := rs.Read(data[:]); err != nil {
+		return nil, fmt.Errorf("read hash table: %v", err)
 	}
+
+	numBuckets := order.Uint32(data[:])
+	bucketsOffset := order.Uint32(data[4:])
 
 	return &HashTable{
 		r:          rs,
@@ -136,22 +133,17 @@ func (r *Reader) readHashTable(rs io.ReadSeeker, offset uint32) (*HashTable, err
 
 func (r *Reader) readTable(rs io.ReadSeeker, description, hashTable uint32) (*Table, error) {
 	if _, err := rs.Seek(int64(description), io.SeekStart); err != nil {
-		return nil, fmt.Errorf("read table: %w", err)
+		return nil, fmt.Errorf("read table: %v", err)
 	}
 
-	var (
-		numColumns,
-		namePointer,
-		columnOffset uint32
-	)
-
-	if err := errors.Join(
-		binary.Read(rs, order, &numColumns),
-		binary.Read(rs, order, &namePointer),
-		binary.Read(rs, order, &columnOffset),
-	); err != nil {
-		return nil, fmt.Errorf("read table: %w", err)
+	data := [12]byte{}
+	if _, err := rs.Read(data[:]); err != nil {
+		return nil, fmt.Errorf("read table: %v", err)
 	}
+
+	numColumns := order.Uint32(data[:])
+	namePointer := order.Uint32(data[4:])
+	columnOffset := order.Uint32(data[8:])
 
 	if _, err := rs.Seek(int64(namePointer), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("read table: %w", err)
@@ -180,17 +172,13 @@ func (r *Reader) readTable(rs io.ReadSeeker, description, hashTable uint32) (*Ta
 }
 
 func (r *Reader) init() error {
-	var (
-		numTables,
-		tablesOffset uint32
-	)
-
-	if err := errors.Join(
-		binary.Read(r.f, order, &numTables),
-		binary.Read(r.f, order, &tablesOffset),
-	); err != nil {
+	data := [8]byte{}
+	if _, err := r.f.Read(data[:]); err != nil {
 		return fmt.Errorf("init: %v", err)
 	}
+
+	numTables := order.Uint32(data[:])
+	tablesOffset := order.Uint32(data[4:])
 
 	if _, err := r.f.Seek(int64(tablesOffset), io.SeekStart); err != nil {
 		return fmt.Errorf("init: tables offset: %v", err)
@@ -198,12 +186,12 @@ func (r *Reader) init() error {
 
 	tableOffsets := make([]struct{ Description, HashTable uint32 }, numTables)
 	for i := range tableOffsets {
-		if err := errors.Join(
-			binary.Read(r.f, order, &tableOffsets[i].Description),
-			binary.Read(r.f, order, &tableOffsets[i].HashTable),
-		); err != nil {
+		if _, err := r.f.Read(data[:]); err != nil {
 			return fmt.Errorf("init: table offsets: %v", err)
 		}
+
+		tableOffsets[i].Description = order.Uint32(data[:])
+		tableOffsets[i].HashTable = order.Uint32(data[4:])
 	}
 
 	for _, offsets := range tableOffsets {
