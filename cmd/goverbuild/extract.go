@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
 	"errors"
 	"flag"
 	"io"
@@ -59,14 +58,11 @@ func (e *Extractor) Extract(path string) {
 	}
 	defer outputFile.Close()
 
-	section, err := record.Section()
+	section, hash, err := record.SectionWithHash()
 	if err != nil {
 		e.LogFatal("%s: %v", path, err)
 		return
 	}
-
-	hash := md5.New()
-	section = io.TeeReader(section, hash)
 
 	if _, err := io.Copy(outputFile, section); err != nil {
 		e.LogFatal("%s: %v", path, err)

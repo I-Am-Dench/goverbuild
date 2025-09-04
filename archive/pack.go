@@ -2,10 +2,12 @@ package archive
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"slices"
@@ -47,6 +49,34 @@ func (r *PackRecord) Section() (io.Reader, error) {
 	}
 
 	return reader, nil
+}
+
+// Returns [*PackRecord.Section] along with an [md5] hash tee'd
+// from the returned [io.Reader]. Therefore, the returned [hash.Hash]
+// will contain the data's uncompressed checksum once all data has
+// been read out of the reader.
+//
+// Example:
+//
+//	reader, hash, err := r.SectionWithHash()
+//	if err != nil {
+//	    // ...
+//	}
+//
+//	if _, err := io.Copy(io.Discard, reader); err != nil {
+//	    // ...
+//	}
+//
+//	fmt.Println(hash.Sum(nil)) // The final hash
+func (r *PackRecord) SectionWithHash() (io.Reader, hash.Hash, error) {
+	reader, err := r.Section()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hash := md5.New()
+	reader = io.TeeReader(reader, hash)
+	return reader, hash, nil
 }
 
 // Returns an [io.Reader] for the record's uncompressed or compressed data.

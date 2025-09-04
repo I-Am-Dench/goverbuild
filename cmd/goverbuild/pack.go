@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
 	"errors"
 	"flag"
 	"fmt"
@@ -93,15 +92,12 @@ func packDump(args []string) {
 			continue
 		}
 
-		section, err := record.Section()
+		section, hash, err := record.SectionWithHash()
 		if err != nil {
 			Error.Print(err)
 			file.Close()
 			continue
 		}
-
-		hash := md5.New()
-		section = io.TeeReader(section, hash)
 
 		if n, err := io.Copy(file, section); err != nil {
 			Error.Print(err)
@@ -188,13 +184,10 @@ func packExtract(args []string) {
 	}
 	defer file.Close()
 
-	section, err := record.Section()
+	section, hash, err := record.SectionWithHash()
 	if err != nil {
 		Error.Fatal(err)
 	}
-
-	hash := md5.New()
-	section = io.TeeReader(section, hash)
 
 	if _, err := io.Copy(file, section); err != nil {
 		Error.Fatal(err)
