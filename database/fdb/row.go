@@ -1,87 +1,9 @@
 package fdb
 
 import (
-	"encoding/binary"
 	"fmt"
-	"io"
 	"math"
 )
-
-type Entry interface {
-	Variant() Variant
-
-	Int32() int32
-	Uint32() uint32
-	Float32() float32
-	String() (string, error)
-	Bool() bool
-	Int64() (int64, error)
-	Uint64() (uint64, error)
-}
-
-type readerEntry struct {
-	r    io.ReadSeeker
-	data uint32
-
-	variant Variant
-}
-
-func (e *readerEntry) Variant() Variant {
-	return e.variant
-}
-
-func (e *readerEntry) Int32() int32 {
-	return int32(e.data)
-}
-
-func (e *readerEntry) Uint32() uint32 {
-	return uint32(e.data)
-}
-
-func (e *readerEntry) Float32() float32 {
-	return math.Float32frombits(e.data)
-}
-
-func (e *readerEntry) String() (s string, err error) {
-	if _, err := e.r.Seek(int64(e.data), io.SeekStart); err != nil {
-		return "", err
-	}
-
-	s, err = ReadZString(e.r)
-	if err != nil {
-		return "", err
-	}
-
-	return s, nil
-}
-
-func (e *readerEntry) Bool() bool {
-	return e.data != 0
-}
-
-func (e *readerEntry) Int64() (v int64, err error) {
-	if _, err := e.r.Seek(int64(e.data), io.SeekStart); err != nil {
-		return 0, err
-	}
-
-	if err := binary.Read(e.r, order, &v); err != nil {
-		return 0, err
-	}
-
-	return v, nil
-}
-
-func (e *readerEntry) Uint64() (v uint64, err error) {
-	if _, err := e.r.Seek(int64(e.data), io.SeekStart); err != nil {
-		return 0, err
-	}
-
-	if err := binary.Read(e.r, order, &v); err != nil {
-		return 0, err
-	}
-
-	return v, nil
-}
 
 type Row []Entry
 
