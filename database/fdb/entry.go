@@ -221,7 +221,7 @@ func (e *DataEntry) scanTime(t time.Time) error {
 // Method satisfying the [sql.Scanner] interface.
 //
 // When [*DataEntry.Variant] is not equal to [VariantNull],
-// the variant will be treated as a hint to what type the value
+// the variant will be treated as a hint for what type the value
 // should be casted to.
 //
 // When [*DataEntry.Variant] is equal to [VariantNull], the variant
@@ -229,9 +229,9 @@ func (e *DataEntry) scanTime(t time.Time) error {
 //
 // The variant is always set to [VariantNull] if value is nil.
 //
-// If the variant is equal to [VariantBool], and value is either an
+// If the variant is equal to [VariantBool] and value is either an
 // int64 or uint64, [*DataEntry]'s value will be set to false if
-// value is 0, and true otherwise.
+// value is 0 and true otherwise.
 //
 // If the provided value is of type [time.Time] and the
 // variant is equal to [VariantI64], [*DataEntry]'s value will
