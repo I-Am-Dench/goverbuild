@@ -96,10 +96,6 @@ func (e *DataEntry) Variant() Variant {
 	return e.variant
 }
 
-func (e *DataEntry) RawData() uint32 {
-	return 0
-}
-
 func (e *DataEntry) Int32() int32 {
 	return e.data.(int32)
 }
