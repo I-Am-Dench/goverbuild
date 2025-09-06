@@ -268,39 +268,3 @@ func TestWrite(t *testing.T) {
 		{Name: "Table3", Columns: []*fdb.Column{{fdb.VariantBool, "boolId"}, {fdb.VariantI32, "index"}}},
 	}))
 }
-
-// func TestCreate(t *testing.T) {
-// 	if err := createTable("basic.fdb", []*fdb.Table{
-// 		{Name: "Accounts", Columns: []*fdb.Column{{fdb.VariantU32, "id"}, {fdb.VariantNVarChar, "name"}, {fdb.VariantU32, "age"}, {fdb.VariantBool, "isActive"}}},
-// 		{Name: "Skills", Columns: []*fdb.Column{{fdb.VariantU32, "accountId"}, {fdb.VariantText, "skillName"}, {fdb.VariantU64, "power"}}},
-// 		{Name: "Version", Columns: []*fdb.Column{{fdb.VariantI32, "major"}, {fdb.VariantI32, "minor"}, {fdb.VariantI32, "patch"}}},
-// 		{Name: "NPCs", Columns: []*fdb.Column{{fdb.VariantNVarChar, "name"}, {fdb.VariantReal, "x"}, {fdb.VariantReal, "y"}, {fdb.VariantReal, "z"}, {fdb.VariantI64, "type"}}},
-// 	}, map[string][]fdb.Row{
-// 		"Accounts": {
-// 			{entry(fdb.VariantU32, uint32(0)), entry(fdb.VariantNVarChar, "Alice"), entry(fdb.VariantU32, uint32(20)), entry(fdb.VariantBool, true)},
-// 			{entry(fdb.VariantU32, uint32(1)), entry(fdb.VariantNVarChar, "Bob"), entry(fdb.VariantU32, uint32(21)), entry(fdb.VariantBool, true)},
-// 			{entry(fdb.VariantU32, uint32(2)), entry(fdb.VariantNVarChar, "Charlie"), entry(fdb.VariantU32, uint32(22)), entry(fdb.VariantBool, false)},
-// 			{entry(fdb.VariantU32, uint32(3)), entry(fdb.VariantNVarChar, "David"), entry(fdb.VariantU32, uint32(23)), entry(fdb.VariantBool, true)},
-// 			{entry(fdb.VariantU32, uint32(4)), entry(fdb.VariantNVarChar, "Eve"), entry(fdb.VariantU32, uint32(24)), entry(fdb.VariantBool, true)},
-// 		},
-// 		"Skills": {
-// 			{entry(fdb.VariantU32, uint32(0)), entry(fdb.VariantText, "JUMP"), entry(fdb.VariantU64, uint64(10))},
-// 			{entry(fdb.VariantU32, uint32(0)), entry(fdb.VariantText, "KICK"), entry(fdb.VariantU64, uint64(5))},
-// 			{entry(fdb.VariantU32, uint32(0)), entry(fdb.VariantText, "PUNCH"), entry(fdb.VariantU64, uint64(20))},
-// 			{entry(fdb.VariantU32, uint32(1)), entry(fdb.VariantText, "JUMP"), entry(fdb.VariantU64, uint64(15))},
-// 			{entry(fdb.VariantU32, uint32(3)), entry(fdb.VariantText, "JUMP"), entry(fdb.VariantU64, uint64(20))},
-// 			{entry(fdb.VariantU32, uint32(3)), entry(fdb.VariantText, "PUNCH"), entry(fdb.VariantU64, uint64(50))},
-// 		},
-// 		"Version": {
-// 			{entry(fdb.VariantI32, int32(1)), entry(fdb.VariantI32, int32(48)), entry(fdb.VariantI32, int32(13))},
-// 		},
-// 		"NPCs": {
-// 			{entry(fdb.VariantNVarChar, "Doctor Overbuild"), entry(fdb.VariantReal, float32(84.76535107832655)), entry(fdb.VariantReal, float32(-56.22811218552046)), entry(fdb.VariantReal, float32(-76.39466766529857)), entry(fdb.VariantI64, int64(10))},
-// 			{entry(fdb.VariantNVarChar, "Hael Storm"), entry(fdb.VariantReal, float32(29.52846880879494)), entry(fdb.VariantReal, float32(9.158960041088449)), entry(fdb.VariantReal, float32(37.72298090662753)), entry(fdb.VariantI64, int64(15))},
-// 			{entry(fdb.VariantNVarChar, "Duke Exeter"), entry(fdb.VariantReal, float32(74.72681257230235)), entry(fdb.VariantReal, float32(23.370179324588918)), entry(fdb.VariantReal, float32(-52.329307984643016)), entry(fdb.VariantI64, int64(20))},
-// 			{entry(fdb.VariantNVarChar, "Vanda Darkflame"), entry(fdb.VariantReal, float32(86.26251744412366)), entry(fdb.VariantReal, float32(90.3301364318929)), entry(fdb.VariantReal, float32(-27.163601074604088)), entry(fdb.VariantI64, int64(25))},
-// 		},
-// 	}); err != nil {
-// 		t.Fatal(err)
-// 	}
-// }

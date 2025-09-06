@@ -218,6 +218,24 @@ func (e *DataEntry) scanTime(t time.Time) error {
 	return nil
 }
 
+// Method satisfying the [sql.Scanner] interface.
+//
+// When [*DataEntry.Variant] is not equal to [VariantNull],
+// the variant will be treated as a hint to what type the value
+// should be casted to.
+//
+// When [*DataEntry.Variant] is equal to [VariantNull], the variant
+// will be set to the [Variant] corresponding to value's type.
+//
+// The variant is always set to [VariantNull] if value is nil.
+//
+// If the variant is equal to [VariantBool], and value is either an
+// int64 or uint64, [*DataEntry]'s value will be set to false if
+// value is 0, and true otherwise.
+//
+// If the provided value is of type [time.Time] and the
+// variant is equal to [VariantI64], [*DataEntry]'s value will
+// be set to the number of seconds since epoch for that time.
 func (e *DataEntry) Scan(value any) error {
 	if value == nil {
 		e.data = nil
@@ -243,9 +261,14 @@ func (e *DataEntry) Scan(value any) error {
 	}
 }
 
-func NewEntry(v Variant, data ...any) *DataEntry {
+// Creates a new [*DataEntry] with the provided
+// [Variant] and optional data.
+//
+// Ensuring that the [Variant] corresponds to the
+// provided data is the job of the caller.
+func NewEntry(variant Variant, data ...any) *DataEntry {
 	entry := &DataEntry{
-		variant: v,
+		variant: variant,
 	}
 	if len(data) > 0 {
 		entry.data = data[0]
