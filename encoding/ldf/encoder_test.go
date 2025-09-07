@@ -27,7 +27,7 @@ func TestMarshal(t *testing.T) {
 		t.Errorf("test marshal: commas only:\nexpected = \"%s\"\nactual   = \"%s\"", expectedData, string(data))
 	}
 
-	data, err = ldf.MarshalTextLines(v)
+	data, err = ldf.MarshalLines(v)
 	if err != nil {
 		t.Fatalf("test marshal: newline commas: %v", err)
 	}

@@ -29,7 +29,7 @@ func NewTextEncoder(w io.Writer, delim ...string) *TextEncoder {
 	return &TextEncoder{w, d, false}
 }
 
-func (encoder *TextEncoder) encodeValue(value reflect.Value, raw bool) (string, ValueType, error) {
+func (e *TextEncoder) encodeValue(value reflect.Value, raw bool) (string, ValueType, error) {
 	if value.Type() == utf16Type {
 		return value.Interface().(Utf16String).String(), StringUtf16, nil
 	}
@@ -82,7 +82,7 @@ func (encoder *TextEncoder) encodeValue(value reflect.Value, raw bool) (string, 
 	}
 }
 
-func (encoder *TextEncoder) Encode(v any) error {
+func (e *TextEncoder) Encode(v any) error {
 	if v == nil {
 		return nil
 	}
@@ -100,17 +100,17 @@ func (encoder *TextEncoder) Encode(v any) error {
 			continue
 		}
 
-		rawValue, valueType, err := encoder.encodeValue(value, field.raw)
+		rawValue, valueType, err := e.encodeValue(value, field.raw)
 		if err != nil {
-			return fmt.Errorf("ldf: encoder: %w", err)
+			return fmt.Errorf("ldf: encode: %w", err)
 		}
 
-		if encoder.wroteLine {
-			fmt.Fprint(encoder.w, encoder.delim)
+		if e.wroteLine {
+			fmt.Fprint(e.w, e.delim)
 		}
 
 		fmt.Fprint(
-			encoder.w,
+			e.w,
 			field.name,
 			"=",
 			int(valueType),
@@ -118,12 +118,51 @@ func (encoder *TextEncoder) Encode(v any) error {
 			rawValue,
 		)
 
-		encoder.wroteLine = true
+		e.wroteLine = true
 	}
 
 	return nil
 }
 
+// MarshalText returns the textual LDF encoding of v.
+//
+// MarshalText only encodes the top level struct. If MarshalText
+// encounters a type it cannot encode it will return an error.
+//
+// The encoding of fields can be customized through the "ldf" key
+// in the field's tag as a comma-separated list. The first option
+// is always the custom field name. Using the name "-" will ignore
+// the field. The other options can be specified in any order.
+// These options include:
+//
+//   - omitempty: indicates that the struct field should not be
+//     encoded if the value is equal to its type's zero value.
+//   - raw (string only): indicates that the field should be
+//     encoded as the [ValueType], [StringUtf8].
+//
+// Strings are encoded with the value type [StringUtf16] while
+// retaining their utf-8 encoding. To encode a string in utf-16,
+// use either the [Utf16String] or []uint16 types.
+//
+// Fields with type []uint8 (or []byte) are encoded with the
+// value type [StringUtf8].
+//
+// Fields with type int or uint are encoded to [Signed64] and [Unsigned64]
+// respectively.
+//
+// Example fields:
+//
+//	// Encodes: "Field=0:"
+//	Field string
+//
+//	// Encodes: "MyField=0:"
+//	Field string `ldf:"MyField"`
+//
+//	// Encodes: "MyField=0:" if Field is not empty
+//	Field string `ldf:"MyField,omitempty"`
+//
+//	// Encodes: "Field=13:"
+//	Field string `ldf:",raw"`
 func MarshalText(v any) ([]byte, error) {
 	buf := bytes.Buffer{}
 	if err := NewTextEncoder(&buf).Encode(v); err != nil {
@@ -132,7 +171,11 @@ func MarshalText(v any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func MarshalTextLines(v any) ([]byte, error) {
+// MarshalLines returns the textual LDF encoding of v with
+// each field separated by a comma and newline character.
+//
+// See [MarshalText] for details.
+func MarshalLines(v any) ([]byte, error) {
 	buf := bytes.Buffer{}
 	if err := NewTextEncoder(&buf, ",\n").Encode(v); err != nil {
 		return nil, err

@@ -47,8 +47,8 @@ type Token struct {
 	RawValue string
 }
 
-func (token *Token) TrimmedValue() string {
-	return strings.TrimSpace(token.RawValue)
+func (t *Token) TrimmedValue() string {
+	return strings.TrimSpace(t.RawValue)
 }
 
 type TextDecoder struct {
@@ -67,7 +67,7 @@ func NewTextDecoder(r io.Reader) *TextDecoder {
 	}
 }
 
-func (decoder *TextDecoder) decodeToken(rawToken string) (Token, error) {
+func (d *TextDecoder) decodeToken(rawToken string) (Token, error) {
 	key, valueWithType, ok := strings.Cut(rawToken, "=")
 	if !ok {
 		return Token{}, &TokenError{errors.New("missing key-value pair"), rawToken}
@@ -94,42 +94,42 @@ func (decoder *TextDecoder) decodeToken(rawToken string) (Token, error) {
 	}, nil
 }
 
-func (decoder *TextDecoder) Next() bool {
-	ok := decoder.s.Scan()
+func (d *TextDecoder) Next() bool {
+	ok := d.s.Scan()
 	if !ok {
-		decoder.err = decoder.s.Err()
+		d.err = d.s.Err()
 		return false
 	}
 
-	rawToken := decoder.s.Text()
-	for len(rawToken) == 0 && decoder.s.Scan() {
-		rawToken = decoder.s.Text()
+	rawToken := d.s.Text()
+	for len(rawToken) == 0 && d.s.Scan() {
+		rawToken = d.s.Text()
 	}
 
 	if (len(strings.TrimSpace(rawToken))) == 0 {
 		return false
 	}
 
-	token, err := decoder.decodeToken(rawToken)
+	token, err := d.decodeToken(rawToken)
 	if err != nil {
-		decoder.err = err
+		d.err = err
 		return false
 	}
 
-	decoder.token = token
+	d.token = token
 
 	return true
 }
 
-func (decoder *TextDecoder) Token() (Token, error) {
-	return decoder.token, decoder.err
+func (d *TextDecoder) Token() (Token, error) {
+	return d.token, d.err
 }
 
-func (decoder *TextDecoder) Err() error {
-	return decoder.err
+func (d *TextDecoder) Err() error {
+	return d.err
 }
 
-func (decoder *TextDecoder) setStructField(field reflect.Value, token Token) (err error) {
+func (d *TextDecoder) setStructField(field reflect.Value, token Token) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("setStructField: %v", r)
@@ -210,19 +210,19 @@ func (decoder *TextDecoder) setStructField(field reflect.Value, token Token) (er
 	return nil
 }
 
-func (decoder *TextDecoder) Decode(v any) error {
-	if v == nil || reflect.TypeOf(v).Kind() != reflect.Pointer {
+func (d *TextDecoder) Decode(v any) error {
+	if reflect.TypeOf(v).Kind() != reflect.Pointer {
 		return nil
 	}
 
 	if reflect.ValueOf(v).IsNil() {
-		return errors.New("ldf: decode: reference cannot be a nil pointer")
+		return errors.New("ldf: decode: v cannot be nil")
 	}
 
 	tokens := make(map[string]Token)
 
-	for decoder.Next() {
-		token, err := decoder.Token()
+	for d.Next() {
+		token, err := d.Token()
 		if err != nil {
 			return err
 		}
@@ -230,7 +230,7 @@ func (decoder *TextDecoder) Decode(v any) error {
 		tokens[strings.TrimSpace(token.Name)] = token
 	}
 
-	if err := decoder.Err(); err != nil {
+	if err := d.Err(); err != nil {
 		return err
 	}
 
@@ -252,7 +252,7 @@ func (decoder *TextDecoder) Decode(v any) error {
 			continue
 		}
 
-		if err := decoder.setStructField(value, token); err != nil {
+		if err := d.setStructField(value, token); err != nil {
 			return fmt.Errorf("ldf: decode: %w", err)
 		}
 	}
@@ -260,6 +260,15 @@ func (decoder *TextDecoder) Decode(v any) error {
 	return nil
 }
 
+// UnmarshalText parser the textual LDF encoded data into v.
+// UnmarshalText returns an error if v is nil.
+//
+// Fields may be separated by either a comma or newlines character.
+//
+// UnmarshalText returns an error if the encoded value type does
+// not match the struct field's type.
+//
+// If the field type is a slice type, a new slice is created.
 func UnmarshalText(data []byte, v any) error {
 	buf := bytes.NewBuffer(data)
 	return NewTextDecoder(buf).Decode(v)
