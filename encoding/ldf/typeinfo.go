@@ -13,6 +13,7 @@ type typeInfo struct {
 type fieldInfo struct {
 	name      string
 	ignore    bool
+	embedded  bool
 	omitEmpty bool
 	raw       bool
 }
@@ -39,8 +40,9 @@ func getTypeInfo(t reflect.Type) *typeInfo {
 			}
 
 			fieldInfo := fieldInfo{
-				name:   name,
-				ignore: !f.IsExported() || tag == "-",
+				name:     name,
+				embedded: f.Anonymous,
+				ignore:   name == "-" || !(f.IsExported() || f.Anonymous),
 			}
 			if !fieldInfo.ignore {
 				for len(options) > 0 {

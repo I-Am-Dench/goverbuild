@@ -8,53 +8,53 @@ import (
 type ValueType int
 
 const (
-	StringUtf16 = ValueType(iota)
-	Signed32
+	ValueTypeString = ValueType(iota)
+	ValueTypeI32
 	_
-	Float
-	Double
-	Unsigned32
+	ValueTypeFloat
+	ValueTypeDouble
+	ValueTypeU32
 	_
-	Bool
-	Unsigned64
-	Signed64
+	ValueTypeBool
+	ValueTypeU64
+	ValueTypeI64
 	_
 	_
 	_
-	StringUtf8
+	ValueTypeUtf8
 )
 
 func (t ValueType) String() string {
 	switch t {
-	case StringUtf16:
-		return "StringUtf16"
-	case Signed32:
+	case ValueTypeString:
+		return "String"
+	case ValueTypeI32:
 		return "Signed32"
-	case Float:
+	case ValueTypeFloat:
 		return "Float"
-	case Double:
+	case ValueTypeDouble:
 		return "Double"
-	case Unsigned32:
+	case ValueTypeU32:
 		return "Unsigned32"
-	case Bool:
+	case ValueTypeBool:
 		return "Bool"
-	case Unsigned64:
+	case ValueTypeU64:
 		return "Unsigned64"
-	case Signed64:
+	case ValueTypeI64:
 		return "Signed64"
-	case StringUtf8:
-		return "StringUtf8"
+	case ValueTypeUtf8:
+		return "Utf8"
 	default:
 		return fmt.Sprintf("ValueType(%d)", t)
 	}
 }
 
-type Utf16String []uint16
+type String16 []uint16
 
-func StringToUtf16(s string) Utf16String {
+func ToString16(s string) String16 {
 	return utf16.Encode([]rune(s))
 }
 
-func (s Utf16String) String() string {
+func (s String16) String() string {
 	return string(utf16.Decode(s))
 }

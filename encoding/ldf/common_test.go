@@ -1,7 +1,9 @@
 package ldf_test
 
 import (
+	"bytes"
 	"fmt"
+	"strconv"
 
 	"github.com/I-Am-Dench/goverbuild/encoding/ldf"
 )
@@ -79,10 +81,57 @@ type Strings struct {
 	Std8  string `ldf:"STD8,raw"`
 	Std16 string `ldf:"STD16"`
 
-	U16   ldf.Utf16String `ldf:"U16"`
-	Bytes []byte          `ldf:"BYTES"`
+	U16   ldf.String16 `ldf:"U16"`
+	Bytes []byte       `ldf:"BYTES"`
 }
 
 func (strings Strings) Format(format string) string {
 	return fmt.Sprintf(format, strings.Std8, strings.Std16, strings.U16.String(), string(strings.Bytes))
+}
+
+type Ints []int
+
+func (l Ints) MarshalText() ([]byte, error) {
+	buf := bytes.Buffer{}
+	for i, n := range l {
+		if i != 0 {
+			buf.WriteRune(';')
+		}
+		buf.WriteString(strconv.Itoa(n))
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (l *Ints) UnmarshalText(text []byte) error {
+	parts := bytes.Split(text, []byte(";"))
+
+	items := []int{}
+	for _, part := range parts {
+		n, err := strconv.Atoi(string(part))
+		if err != nil {
+			return fmt.Errorf("could not parse int: %v", err)
+		}
+		items = append(items, n)
+	}
+	*l = items
+
+	return nil
+}
+
+type WithEncodings struct {
+	IntList Ints `ldf:"int_list"`
+}
+
+type SubStruct struct {
+	A int `ldf:"a"`
+}
+
+type Embedded struct {
+	SubStruct
+	B float32 `ldf:"b"`
+}
+
+func (e Embedded) Format(format string) string {
+	return fmt.Sprintf(format, e.A, e.B)
 }
