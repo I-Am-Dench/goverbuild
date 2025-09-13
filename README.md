@@ -23,6 +23,14 @@ go install github.com/I-Am-Dench/goverbuild/cmd/goverbuild@latest
 
 More information can be found here: [`/cmd/goverbuild/README.md`](cmd/goverbuild/README.md)
 
+An FDB file converter can be installed with:
+
+```bash
+go install github.com/I-Am-Dench/goverbuild/cmd/gb-fdb@latest
+```
+
+More information can be found here: [`/cmd/gb-fdb/README.md`](cmd/gb-fdb/README.md)
+
 ## Contents
 
 ### `/archive`
@@ -43,6 +51,10 @@ Packages related to `.sd0` and `.si0` files. Currently, ONLY `.sd0` reading is i
 - [x] sd0 writer
 - [ ] si0 reader and writer
 - [ ] sd0 and si0 tests
+
+### `/database`
+
+Packages related to `.fdb` files.
 
 ### `/encoding`
 
