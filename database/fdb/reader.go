@@ -207,7 +207,7 @@ func (r *Reader) init() error {
 }
 
 // Closes the underlying [*os.File] only if the Reader
-// was created by a call to [Open].
+// was created by a call to [OpenReader].
 func (r *Reader) Close() error {
 	if r.closer {
 		return r.f.Close()
