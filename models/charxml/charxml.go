@@ -147,7 +147,7 @@ type Character struct {
 	MaxCurrency      uint64  `xml:"cm,attr"`
 	ClaimCode        uint64  `xml:"co,attr"`
 	FreeToPlay       bool    `xml:"ft,attr"`
-	GMLevel          uint32  `xml:"gm,attr"`
+	GMLevel          GMLevel `xml:"gm,attr"`
 	LastLogin        int64   `xml:"llog,attr"`
 	LastRespawnPosX  float32 `xml:"lrx,attr"`
 	LastRespawnPosY  float32 `xml:"lry,attr"`
