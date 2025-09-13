@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
+	"regexp"
 	"slices"
 	"testing"
 	"unsafe"
@@ -242,6 +243,31 @@ func TestDecode(t *testing.T) {
 
 		if expected.B != actual.B {
 			t.Errorf("expected float32 %f but got %f", expected.B, actual.B)
+		}
+	})
+
+	t.Run("delim", func(t *testing.T) {
+		expected := Strings{
+			Std8:  "Some text with a comma, I guess...",
+			Std16: "Mermaid Man says: \"BUY MORE CARDS\"",
+		}
+
+		data := []byte(fmt.Sprintf("STD8=0:%s\nSTD16=13:%s", expected.Std8, expected.Std16))
+
+		decoder := ldf.NewTextDecoder(bytes.NewReader(data))
+		decoder.SetDelim(regexp.MustCompile("\n"))
+
+		actual := Strings{}
+		if err := decoder.Decode(&actual); err != nil {
+			t.Fatal(err)
+		}
+
+		if expected.Std8 != actual.Std8 {
+			t.Errorf("expected %q but got %q", expected.Std8, actual.Std8)
+		}
+
+		if expected.Std16 != actual.Std16 {
+			t.Errorf("expected %q but got %q", expected.Std16, actual.Std16)
 		}
 	})
 }

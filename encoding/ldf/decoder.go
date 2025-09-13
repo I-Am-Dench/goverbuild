@@ -21,14 +21,38 @@ type Token struct {
 
 var delimPattern = regexp.MustCompile("(,|\r\n|\n)")
 
-func splitDelim(data []byte, atEOF bool) (advance int, token []byte, err error) {
+var textUnmarshalerType = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
+
+type TextDecoder struct {
+	delim *regexp.Regexp
+	s     *bufio.Scanner
+	err   error
+
+	token Token
+}
+
+func NewTextDecoder(r io.Reader) *TextDecoder {
+	d := &TextDecoder{
+		delim: delimPattern,
+		s:     bufio.NewScanner(r),
+	}
+	d.s.Split(d.splitDelim)
+
+	return d
+}
+
+func (d *TextDecoder) SetDelim(delim *regexp.Regexp) {
+	d.delim = delim
+}
+
+func (d *TextDecoder) splitDelim(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}
 
-	match := delimPattern.FindIndex(data)
+	match := d.delim.FindIndex(data)
 	if match != nil {
-		return match[1], data[0:match[0]], nil
+		return match[1], data[:match[0]], nil
 	}
 
 	if atEOF {
@@ -36,24 +60,6 @@ func splitDelim(data []byte, atEOF bool) (advance int, token []byte, err error) 
 	}
 
 	return 0, nil, nil
-}
-
-var textUnmarshalerType = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
-
-type TextDecoder struct {
-	s   *bufio.Scanner
-	err error
-
-	token Token
-}
-
-func NewTextDecoder(r io.Reader) *TextDecoder {
-	scanner := bufio.NewScanner(r)
-	scanner.Split(splitDelim)
-
-	return &TextDecoder{
-		s: scanner,
-	}
 }
 
 func (d *TextDecoder) decodeToken(rawToken []byte) (Token, error) {
@@ -338,8 +344,9 @@ func (d *TextDecoder) Decode(v any) error {
 // UnmarshalText only decodes pointers to structs or maps with
 // a string key type.
 //
-// Fields may be separated by either a comma, a newline character,
-// or a CRLF.
+// Fields, by default, are delimited by a comma, a newline
+// character, or a CRLF. The delimiter can be changed on a custom
+// decoder by calling [TextDecoder.SetDelim].
 //
 // UnmarshalText returns an error if the encoded value type does
 // not match the struct field's type.
@@ -349,7 +356,7 @@ func (d *TextDecoder) Decode(v any) error {
 // Fields that implement the [encoding.TextUnmarshaler] interface are
 // only unmarshaled if the value type is either [ValueTypeString] or
 // [ValueTypeUtf8]. If the field's type is not a pointer, the pointer
-// type to that field is check for compatibility with [encoding.TextUnmarshaler].
+// type to that field is checked for compatibility with [encoding.TextUnmarshaler].
 //
 // When decoding a map:
 //   - [ValueTypeUtf8] is decoded as a []uint8. If the map's value
