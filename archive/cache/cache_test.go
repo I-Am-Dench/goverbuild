@@ -9,6 +9,8 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -132,8 +134,56 @@ func testRead(name string, expectedEntries []Entry) func(*testing.T) {
 	}
 }
 
+func checkIterator(t *testing.T, r io.Reader, expectedEntries []Entry) {
+	cacheFile, err := cache.Read(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	actualEntries := slices.Collect(cacheFile.All())
+	if len(actualEntries) != len(expectedEntries) {
+		t.Errorf("expected %d entries but got %d", len(expectedEntries), len(actualEntries))
+		return
+	}
+
+	slices.SortFunc(expectedEntries, func(a, b Entry) int { return strings.Compare(a.Path, b.Path) })
+	slices.SortFunc(actualEntries, func(a, b cache.QuickCheck) int { return strings.Compare(a.Path(), b.Path()) })
+
+	for i, expected := range expectedEntries {
+		checkEntry(t, expected, actualEntries[i])
+	}
+}
+
+func testIterator(name string, expectedEntries []Entry) func(*testing.T) {
+	return func(t *testing.T) {
+		file, err := os.Open(filepath.Join("testdata", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+
+		checkIterator(t, file, expectedEntries)
+	}
+}
+
 func TestRead(t *testing.T) {
 	t.Run("read_basic", testRead("basic.txt", []Entry{
+		newEntry("client\\awesomium.dll", 1312891366, 283039, 21562880, "e00896c0ecc03a375dcd54b9b1034b54"),
+		newEntry("client\\awesomiumprocess.exe", 1312891378, 381248, 451176, "9c5b7ab68910e0be65419c617b8394fc"),
+		newEntry("client\\binkw32.dll", 1312891372, 640674, 174080, "80d353fadd34bb551b912289eae596af"),
+		newEntry("client\\cop.dll", 1312891368, 59216, 3862528, "da50f2b835941cd72b8596fb2716ef44"),
+		newEntry("client\\d3dx9_34.dll", 1312891359, 959406, 3497832, "1ca939918ed1b930059b3a882de6f648"),
+		newEntry("client\\fmod_event.dll", 1312891338, 617272, 307200, "203956a75fe0d8ac6906793bdfe0d211"),
+		newEntry("client\\fmodex.dll", 1312891341, 396550, 843776, "7d040207c78542104a8790ab695bc9c0"),
+		newEntry("client\\icudt42.dll", 1312891335, 763987, 10941440, "0c5bd1f7a69a176d6029a8c598a13261"),
+		newEntry("client\\legouniverse.exe", 1320337851, 961618, 23029352, "29d6870c6e9229cafd58d0e613d10f89"),
+		newEntry("client\\locale\\locale.xml", 1320337856, 54617, 9047759, "fda4d857c7ce8cfa1e7d44b2333b64f2"),
+		newEntry("client\\locales\\en-us.dll", 1312891352, 465657, 111104, "a0ac7b4b394e345177de08a668b47672"),
+		newEntry("client\\lwo.cfg.default", 1312891341, 703581, 6104, "9c7d30d4701e1406e1c52cac8f7d5593"),
+		newEntry("client\\lwoclient.state", 1312891322, 676678, 2260, "8b9b37ea73e2d242463f697840085b35"),
+	}))
+
+	t.Run("basic_iterator", testIterator("basic.txt", []Entry{
 		newEntry("client\\awesomium.dll", 1312891366, 283039, 21562880, "e00896c0ecc03a375dcd54b9b1034b54"),
 		newEntry("client\\awesomiumprocess.exe", 1312891378, 381248, 451176, "9c5b7ab68910e0be65419c617b8394fc"),
 		newEntry("client\\binkw32.dll", 1312891372, 640674, 174080, "80d353fadd34bb551b912289eae596af"),

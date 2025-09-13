@@ -36,11 +36,11 @@ func cacheCheck(args []string) {
 		}
 	}()
 
-	cacheFile.Range(func(qc cache.QuickCheck) bool {
+	for qc := range cacheFile.All() {
 		stat, err := os.Stat(filepath.Join(*root, qc.Path()))
 		if err != nil {
 			Error.Printf("%s: %v", qc.Path(), err)
-			return true
+			break
 		}
 
 		if err := qc.Check(stat, archive.Info{
@@ -51,9 +51,7 @@ func cacheCheck(args []string) {
 		} else {
 			Verbose.Printf("%s: entry matches!", qc.Path())
 		}
-
-		return true
-	})
+	}
 }
 
 func verifyEntry(path string, entry *manifest.Entry) error {

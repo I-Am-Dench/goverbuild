@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -169,6 +170,14 @@ func (c *Cache) Range(f RangeFunc) {
 	c.sm.Range(func(key, value any) bool {
 		return f(value.(QuickCheck))
 	})
+}
+
+func (c *Cache) All() iter.Seq[QuickCheck] {
+	return func(yield func(QuickCheck) bool) {
+		c.sm.Range(func(_, value any) bool {
+			return yield(value.(QuickCheck))
+		})
+	}
 }
 
 func (c *Cache) Len() (length int) {
