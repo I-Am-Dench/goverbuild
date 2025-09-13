@@ -8,7 +8,7 @@ import (
 type ValueType int
 
 const (
-	ValueTypeString = ValueType(iota)
+	ValueTypeString = ValueType(iota) // An encoding-independent string (could be utf-8 or utf-16 depending on usage).
 	ValueTypeI32
 	_
 	ValueTypeFloat
@@ -21,7 +21,7 @@ const (
 	_
 	_
 	_
-	ValueTypeUtf8
+	ValueTypeUtf8 // A string intended to always be encoded in utf-8.
 )
 
 func (t ValueType) String() string {
