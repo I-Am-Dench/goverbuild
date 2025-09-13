@@ -15,14 +15,13 @@ import (
 	"github.com/I-Am-Dench/goverbuild/database/fdb"
 )
 
-type RowWriter interface {
+type TableWriter interface {
 	Row(fdb.Row)
 	Flush() error
 }
 
 type FdbTable struct {
 	*tabwriter.Writer
-
 	Columns []*fdb.Column
 }
 
@@ -40,57 +39,56 @@ func NewFdbTable(w io.Writer, columns []*fdb.Column, withColumnTypes bool) *FdbT
 	return &FdbTable{tab, columns}
 }
 
-func (tab *FdbTable) Row(row fdb.Row) {
-	for i := 0; i < len(tab.Columns); i++ {
+func (t *FdbTable) Row(row fdb.Row) {
+	for i := 0; i < len(t.Columns); i++ {
 		entry, err := row.Column(i)
 		if err != nil {
-			log.Fatal(err)
+			Error.Fatal(err)
 		}
 
 		switch entry.Variant() {
 		case fdb.VariantNull:
-			io.WriteString(tab, "[null]")
+			io.WriteString(t, "[null]")
 		case fdb.VariantI32:
-			fmt.Fprintf(tab, "%d", entry.Int32())
+			fmt.Fprintf(t, "%d", entry.Int32())
 		case fdb.VariantU32:
-			fmt.Fprintf(tab, "%d", entry.Uint32())
+			fmt.Fprintf(t, "%d", entry.Uint32())
 		case fdb.VariantReal:
-			fmt.Fprintf(tab, "%g", entry.Float32())
+			fmt.Fprintf(t, "%g", entry.Float32())
 		case fdb.VariantNVarChar, fdb.VariantText:
 			s, err := entry.String()
 			if err != nil {
 				log.Fatal(err)
 			}
-			io.WriteString(tab, s)
+			io.WriteString(t, s)
 		case fdb.VariantBool:
-			fmt.Fprintf(tab, "%t", entry.Bool())
+			fmt.Fprintf(t, "%t", entry.Bool())
 		case fdb.VariantI64:
 			v, err := entry.Int64()
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Fprintf(tab, "%d", v)
+			fmt.Fprintf(t, "%d", v)
 		case fdb.VariantU64:
 			v, err := entry.Uint64()
 			if err != nil {
 				log.Fatal(err)
 			}
-			fmt.Fprintf(tab, "%d", v)
+			fmt.Fprintf(t, "%d", v)
 		default:
-			fmt.Fprintf(tab, "?unknown: %s?", entry.Variant())
+			fmt.Fprintf(t, "?unknown: %s?", entry.Variant())
 		}
-		io.WriteString(tab, "\t")
+		io.WriteString(t, "\t")
 	}
-	io.WriteString(tab, "\n")
+	io.WriteString(t, "\n")
 }
 
-type FdbCsv struct {
+type CsvTable struct {
 	*csv.Writer
-
 	Columns []*fdb.Column
 }
 
-func NewFdbCsv(w io.Writer, columns []*fdb.Column, withHeader bool) *FdbCsv {
+func NewCsvTable(w io.Writer, columns []*fdb.Column, withHeader bool) *CsvTable {
 	c := csv.NewWriter(w)
 
 	if withHeader {
@@ -101,10 +99,10 @@ func NewFdbCsv(w io.Writer, columns []*fdb.Column, withHeader bool) *FdbCsv {
 		c.Write(record)
 	}
 
-	return &FdbCsv{c, columns}
+	return &CsvTable{c, columns}
 }
 
-func (c *FdbCsv) Row(row fdb.Row) {
+func (c *CsvTable) Row(row fdb.Row) {
 	record := make([]string, len(c.Columns))
 
 	for i := 0; i < len(c.Columns); i++ {
@@ -154,51 +152,77 @@ func (c *FdbCsv) Row(row fdb.Row) {
 	c.Write(record)
 }
 
-func (c *FdbCsv) Flush() error {
+func (c *CsvTable) Flush() error {
 	c.Writer.Flush()
-	return nil
+	return c.Writer.Error()
+}
+
+func fdbTables(args []string) {
+	flagset := flag.NewFlagSet("fdb:tables", flag.ExitOnError)
+	flagset.Parse(args)
+
+	inputName := flagset.Arg(0)
+	if len(inputName) == 0 {
+		Error.Fatal("input name not provided")
+	}
+
+	db, err := fdb.OpenReader(inputName)
+	if errors.Is(err, os.ErrNotExist) {
+		Error.Fatalf("fdb file does not exist: %s", inputName)
+	}
+
+	if err != nil {
+		Error.Fatal(err)
+	}
+	defer db.Close()
+
+	for _, table := range db.Tables() {
+		fmt.Println(table.Name)
+	}
 }
 
 func fdbDump(args []string) {
 	flagset := flag.NewFlagSet("fdb:dump", flag.ExitOnError)
-	withColumnTypes := flagset.Bool("coltypes", false, "Show type information next to column name.")
+	withColumnTypes := flagset.Bool("colTypes", false, "Show type information next to column names.")
 	asCsv := flagset.Bool("csv", false, "Write table info as a csv.")
-	csvHeader := flagset.Bool("csvheader", false, "Write column names as the first row of csv data.")
+	csvHeader := flagset.Bool("csvHeader", false, "Write column names as the first row of csv data.")
 	flagset.Parse(args)
 
-	path := GetArgFilename(flagset, 0)
-
-	if flagset.NArg() < 2 {
-		log.Fatalf("missing table name")
+	inputName := flagset.Arg(0)
+	if len(inputName) == 0 {
+		Error.Fatal("input name not provided")
 	}
 
-	tableName := flagset.Args()[1]
+	tableName := flagset.Arg(1)
+	if len(tableName) == 0 {
+		Error.Fatal("missing table name")
+	}
 
-	db, err := fdb.OpenReader(path)
+	db, err := fdb.OpenReader(inputName)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", path)
+		Error.Fatalf("fdb file does not exist: %s", inputName)
 	}
 
 	if err != nil {
-		log.Fatal(err)
+		Error.Fatal(err)
 	}
 	defer db.Close()
 
 	table, ok := db.FindTable(tableName)
 	if !ok {
-		log.Fatalf("table does not exist: %s", tableName)
+		Error.Fatalf("table does not exist: %s", tableName)
 	}
 
-	var w RowWriter
+	var w TableWriter
 	if *asCsv {
-		w = NewFdbCsv(os.Stdout, table.Columns, *csvHeader)
+		w = NewCsvTable(os.Stdout, table.Columns, *csvHeader)
 	} else {
-		w = NewFdbTable(os.Stdout, table.Columns, *withColumnTypes)
+		w = NewCsvTable(os.Stdout, table.Columns, *withColumnTypes)
 	}
 
 	for row, err := range table.Rows() {
 		if err != nil {
-			log.Fatal(err)
+			Error.Fatal(err)
 		}
 
 		w.Row(row)
@@ -210,33 +234,14 @@ func fdbDump(args []string) {
 	w.Flush()
 }
 
-func fdbTables(args []string) {
-	flagset := flag.NewFlagSet("fdb:tables", flag.ExitOnError)
-	flagset.Parse(args)
-
-	path := GetArgFilename(flagset, 0)
-
-	db, err := fdb.OpenReader(path)
-	if errors.Is(err, os.ErrNotExist) {
-		log.Fatalf("file does not exist: %s", path)
-	}
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-
-	for _, table := range db.Tables() {
-		fmt.Println(table.Name)
-	}
-}
-
 var FdbCommands = CommandList{
 	"tables": fdbTables,
 	"dump":   fdbDump,
 }
 
 func doFdb(args []string) {
+	SetLogPrefix("goverbuild(fdb): ")
+
 	if len(args) < 1 {
 		FdbCommands.Usage()
 	}
