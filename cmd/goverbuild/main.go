@@ -36,6 +36,7 @@ var Commands = CommandList{
 	"extract":   doExtract,
 	"cache":     doCache,
 	"segmented": doSegmented,
+	"fdb":       doFdb,
 }
 
 func main() {

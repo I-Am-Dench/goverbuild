@@ -47,3 +47,8 @@ in your packed client's installation directory. That is, the directory containin
 
 - `compress`: Compresses a file to a segmented data file (.sd0)
 - `decompress`: Decompresses a segmented data file into a file
+
+### `fdb`
+
+- `tables`: List all tables within a given fdb database.
+- `dump`: Display the rows of a table formatted as either a table or a CSV.
