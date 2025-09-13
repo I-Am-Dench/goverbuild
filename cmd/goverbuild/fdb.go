@@ -174,7 +174,7 @@ func fdbDump(args []string) {
 
 	tableName := flagset.Args()[1]
 
-	db, err := fdb.Open(path)
+	db, err := fdb.OpenReader(path)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", path)
 	}
@@ -216,7 +216,7 @@ func fdbTables(args []string) {
 
 	path := GetArgFilename(flagset, 0)
 
-	db, err := fdb.Open(path)
+	db, err := fdb.OpenReader(path)
 	if errors.Is(err, os.ErrNotExist) {
 		log.Fatalf("file does not exist: %s", path)
 	}

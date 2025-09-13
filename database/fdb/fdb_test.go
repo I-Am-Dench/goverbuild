@@ -115,7 +115,7 @@ func checkReader(t *testing.T, expectedDb TestDb, reader *fdb.Reader) {
 
 func testRead(fdbName string, expectedDb TestDb) func(*testing.T) {
 	return func(t *testing.T) {
-		reader, err := fdb.Open(filepath.Join("testdata", fdbName))
+		reader, err := fdb.OpenReader(filepath.Join("testdata", fdbName))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -245,7 +245,7 @@ func testWrite(dir string, tables []*fdb.Table) func(*testing.T) {
 		}
 		t.Logf("created FDB file: %s", fdbName)
 
-		reader, err := fdb.Open(fdbName)
+		reader, err := fdb.OpenReader(fdbName)
 		if err != nil {
 			t.Fatal(err)
 		}

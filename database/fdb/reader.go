@@ -216,7 +216,7 @@ func (r *Reader) Close() error {
 }
 
 // Creates a [*Reader] with the provided [*os.File].
-func New(file *os.File) (*Reader, error) {
+func NewReader(file *os.File) (*Reader, error) {
 	r := &Reader{
 		f:      file,
 		tables: []*Table{},
@@ -229,13 +229,13 @@ func New(file *os.File) (*Reader, error) {
 }
 
 // Creates a [*Reader] with the named [*os.File].
-func Open(name string) (*Reader, error) {
+func OpenReader(name string) (*Reader, error) {
 	file, err := os.Open(name)
 	if err != nil {
 		return nil, fmt.Errorf("fdb: %w", err)
 	}
 
-	r, err := New(file)
+	r, err := NewReader(file)
 	if err != nil {
 		file.Close()
 		return nil, fmt.Errorf("fdb: %v", err)

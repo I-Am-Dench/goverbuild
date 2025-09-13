@@ -144,7 +144,7 @@ func main() {
 
 		Verbose.Printf("Converting %s to %s (%s)", input, DriverName, output)
 
-		r, err := fdb.Open(input)
+		r, err := fdb.OpenReader(input)
 		if err != nil {
 			Error.Fatal(err)
 		}
