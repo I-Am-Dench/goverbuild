@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	string16Type      = reflect.TypeOf(String16([]uint16{}))
-	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+	string16Type      = reflect.TypeFor[String16]()
+	textMarshalerType = reflect.TypeFor[encoding.TextMarshaler]()
 )
 
 type TextEncoder struct {

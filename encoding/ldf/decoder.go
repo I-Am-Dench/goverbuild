@@ -21,7 +21,7 @@ type Token struct {
 
 var delimPattern = regexp.MustCompile("(,|\r\n|\n)")
 
-var textUnmarshalerType = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
+var textUnmarshalerType = reflect.TypeFor[encoding.TextUnmarshaler]()
 
 type TextDecoder struct {
 	delim *regexp.Regexp
