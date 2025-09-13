@@ -257,7 +257,7 @@ func (r *Rows) Err() error {
 //
 // Each row is identified by the first column's value
 // converted to an integer. The bucket linked list that
-// contains the row is then located at the index: ID % the # of rows.
+// contains the row is then located at the index: ID % the # of buckets.
 type HashTable struct {
 	r          io.ReadSeeker
 	base       int64
