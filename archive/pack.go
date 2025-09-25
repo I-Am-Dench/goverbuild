@@ -320,6 +320,15 @@ func (p *Pack) Store(path string, info Info, compressed bool, r io.Reader) (err 
 		binarytree.UpdateIndices(p.records)
 	}()
 
+	// Records must be read BEFORE marking the pack as dirty
+	// since ReadRecords will contain the current state of Pack.records
+	// if it's dirty, which may be empty if the first method called on
+	// Pack is Store.
+	records, err := p.ReadRecords()
+	if err != nil {
+		return fmt.Errorf("store: %v", err)
+	}
+
 	if !p.dirty {
 		p.revision++
 	}
@@ -327,7 +336,6 @@ func (p *Pack) Store(path string, info Info, compressed bool, r io.Reader) (err 
 
 	crc := GetCrc(path)
 
-	records := p.Records()
 	i := sort.Search(len(records), func(i int) bool { return records[i].Crc >= crc })
 	if i < len(records) && records[i].Crc == crc {
 		if err := p.updateRecord(slices.Clone(records), i, info, compressed, r); err != nil {
