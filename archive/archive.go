@@ -197,8 +197,8 @@ func (a *Archive) Close() error {
 //
 // All packs opened from [Archive.FindPack] are opened relative
 // to root.
-func New(root string, catalog *Catalog) Archive {
-	return Archive{
+func New(root string, catalog *Catalog) *Archive {
+	return &Archive{
 		root:    root,
 		catalog: catalog,
 		packs:   make(map[string]*Pack),
@@ -210,10 +210,10 @@ func New(root string, catalog *Catalog) Archive {
 //
 // Calling [*Archive.Close] on an Archive created through a call
 // from Open causes the underlying catalog to be closed.
-func Open(root, catalogPath string) (Archive, error) {
+func Open(root, catalogPath string) (*Archive, error) {
 	catalog, err := OpenCatalog(catalogPath)
 	if err != nil {
-		return Archive{}, fmt.Errorf("archive: %w", err)
+		return nil, fmt.Errorf("archive: %w", err)
 	}
 
 	archive := New(root, catalog)

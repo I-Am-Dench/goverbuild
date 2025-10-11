@@ -19,7 +19,7 @@ type Extractor struct {
 
 	InstallPath string
 
-	Archive archive.Archive
+	Archive *archive.Archive
 }
 
 func (e *Extractor) LogFatal(format string, a ...any) {
