@@ -192,10 +192,10 @@ func (a *Archive) Close() error {
 	return errors.Join(errs...)
 }
 
-// Creates an [Archive] with the provided root directory
+// Creates an [*Archive] with the provided root directory
 // and [*Catalog].
 //
-// All packs opened from [Archive.FindPack] are opened relative
+// All packs opened from [*Archive.FindPack] are opened relative
 // to root.
 func New(root string, catalog *Catalog) *Archive {
 	return &Archive{
@@ -205,7 +205,7 @@ func New(root string, catalog *Catalog) *Archive {
 	}
 }
 
-// Creates an [Archive] with the provided root directory
+// Creates an [*Archive] with the provided root directory
 // and named [*Catalog].
 //
 // Calling [*Archive.Close] on an Archive created through a call
