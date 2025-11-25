@@ -100,14 +100,7 @@ func (a *Archive) createIfNotExist(path string) error {
 	return nil
 }
 
-// Returns a [*Pack], opening it if necessary, for a provided path
-// recorded in the [Archive]'s catalog. FindPack will also return the
-// [*CatalogRecord] associated with that path.
-//
-// Pack paths are cleaned before being joined with the root directory.
-//
-// If the pack does not yet exist, a new one is created.
-func (a *Archive) FindPack(path string) (*Pack, *CatalogRecord, error) {
+func (a *Archive) findPack(path string, createIfNotExists bool) (*Pack, *CatalogRecord, error) {
 	record, ok := a.catalog.Search(path)
 	if !ok {
 		return nil, nil, fmt.Errorf("%s: %w", path, ErrNotCataloged)
@@ -119,8 +112,10 @@ func (a *Archive) FindPack(path string) (*Pack, *CatalogRecord, error) {
 	}
 
 	packPath := filepath.Join(a.root, filepath.Clean(record.PackName))
-	if err := a.createIfNotExist(packPath); err != nil {
-		return nil, nil, err
+	if createIfNotExists {
+		if err := a.createIfNotExist(packPath); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	pack, err := OpenPack(packPath)
@@ -132,6 +127,17 @@ func (a *Archive) FindPack(path string) (*Pack, *CatalogRecord, error) {
 	return pack, record, nil
 }
 
+// Returns a [*Pack], opening it if necessary, for a provided path
+// recorded in the [Archive]'s catalog. FindPack will also return the
+// [*CatalogRecord] associated with that path.
+//
+// Pack paths are cleaned before being joined with the root directory.
+//
+// If the pack does not yet exist, a new one is created.
+func (a *Archive) FindPack(path string) (*Pack, *CatalogRecord, error) {
+	return a.findPack(path, false)
+}
+
 // Stores the given file data in the [*Pack] corresponding
 // to the provided path in the catalog.
 //
@@ -141,7 +147,7 @@ func (a *Archive) FindPack(path string) (*Pack, *CatalogRecord, error) {
 // ignoring the file data, Store will return a wrapped [ErrCatalogMismatch] error,
 // which can be tested using [errors.Is].
 func (a *Archive) Store(path string, info Info, compressed bool, r io.Reader) error {
-	pack, record, err := a.FindPack(path)
+	pack, record, err := a.findPack(path, true) // create the pack if it doesn't already exist
 	if err != nil {
 		return fmt.Errorf("find pack: %w", err)
 	}
