@@ -87,6 +87,10 @@ type Archive struct {
 }
 
 func (a *Archive) createIfNotExist(path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+
 	file, err := os.OpenFile(path, os.O_CREATE, 0664)
 	if err != nil {
 		return err
