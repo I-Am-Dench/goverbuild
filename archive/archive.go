@@ -86,6 +86,10 @@ type Archive struct {
 	packs   map[string]*Pack
 }
 
+func (a *Archive) Catalog() *Catalog {
+	return a.catalog
+}
+
 func (a *Archive) createIfNotExist(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err

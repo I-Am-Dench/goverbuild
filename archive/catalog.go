@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 
@@ -87,7 +88,7 @@ func (c *Catalog) readPackNames() ([]string, error) {
 			return nil, fmt.Errorf("read pack names: %v", err)
 		}
 
-		names[i] = string(data)
+		names[i] = filepath.ToSlash(string(data))
 	}
 
 	return names, nil
@@ -163,7 +164,7 @@ func (c *Catalog) Store(entries CatalogEntries) error {
 	records := []*CatalogRecord{}
 	for packName, entries := range entries {
 		if slices.Index(c.packNames, packName) < 0 {
-			c.packNames = append(c.packNames, packName)
+			c.packNames = append(c.packNames, filepath.ToSlash(packName))
 		}
 
 		for _, entry := range entries {
