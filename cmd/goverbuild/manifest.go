@@ -40,8 +40,10 @@ func doManifest(args []string) {
 		return
 	}
 
-	Info.Printf("Found %d files:", len(manifestFile.Entries))
-	for _, entry := range manifestFile.Entries {
+	entries := manifestFile.Entries()
+
+	Info.Printf("Found %d files:", len(entries))
+	for _, entry := range entries {
 		fmt.Printf("%s => uncompressedSize=%d; uncompressedChecksum=%x; compressedSize=%d; compressedChecksum=%x\n", entry.Path, entry.UncompressedSize, entry.UncompressedChecksum, entry.CompressedSize, entry.CompressedChecksum)
 	}
 }

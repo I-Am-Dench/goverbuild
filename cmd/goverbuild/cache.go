@@ -54,7 +54,7 @@ func cacheCheck(args []string) {
 	}
 }
 
-func verifyEntry(path string, entry *manifest.Entry) error {
+func verifyEntry(path string, entry manifest.Entry) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func cacheUpdate(args []string) {
 		Error.Fatal(err)
 	}
 
-	for _, entry := range manifestFile.Entries {
+	for _, entry := range manifestFile.Entries() {
 		stat, err := os.Stat(filepath.Join(*root, entry.Path))
 		if errors.Is(err, os.ErrNotExist) {
 			continue

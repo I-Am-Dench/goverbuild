@@ -130,7 +130,7 @@ func doExtract(args []string) {
 	}
 
 	Info.Printf("(%s) Extracting client resources...", manifest.Name)
-	for _, entry := range manifest.Entries {
+	for _, entry := range manifest.Entries() {
 		extractor.Extract(entry.Path)
 	}
 }

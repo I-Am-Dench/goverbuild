@@ -25,28 +25,35 @@ func testRead(name string, expected *manifest.Manifest) func(*testing.T) {
 			t.Errorf("expected name %s but got %s", expected.Name, actual.Name)
 		}
 
-		if len(expected.Entries) != len(actual.Entries) {
-			t.Fatalf("expected %d files but got %d", len(expected.Entries), len(actual.Entries))
+		expectedEntries := expected.Entries()
+		actualEntries := actual.Entries()
+
+		if len(expectedEntries) != len(actualEntries) {
+			t.Fatalf("expected %d files but got %d", len(expectedEntries), len(actualEntries))
 		}
 
-		for i, actual := range actual.Entries {
-			expected := expected.Entries[i]
+		for _, expectedEntry := range expectedEntries {
+			actualEntry, ok := actual.GetEntry(expectedEntry.Path)
+			if !ok {
+				t.Errorf("manifest does not contain %s", expectedEntry.Path)
+				continue
+			}
 
-			if expected.Path != actual.Path {
-				t.Errorf("expected %s but got %s", expected.Path, actual.Path)
+			if expectedEntry.Path != actualEntry.Path {
+				t.Errorf("expected name %s but got %s", expectedEntry.Path, actualEntry.Path)
 			}
 		}
 	}
 }
 
-func newManifest(version int, name string, entries []string) *manifest.Manifest {
+func newManifest(version int, name string, names []string) *manifest.Manifest {
 	m := &manifest.Manifest{Version: version, Name: name}
 
-	for _, entry := range entries {
-		m.Entries = append(m.Entries, &manifest.Entry{
-			Path: entry,
-		})
+	entries := []manifest.Entry{}
+	for _, n := range names {
+		entries = append(entries, manifest.Entry{Path: n})
 	}
+	m.AddEntries(entries...)
 
 	return m
 }

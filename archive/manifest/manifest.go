@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -79,7 +80,7 @@ func (e *Entry) UnmarshalText(text []byte) error {
 		return &MismatchedChecksumError{entryChecksum, actual}
 	}
 
-	e.Path = string(matches[fieldFileName])
+	e.Path = strings.ToLower(filepath.ToSlash(string(matches[fieldFileName])))
 	e.Info = archive.Info{
 		UncompressedSize:     uint32(uncompressedSize),
 		UncompressedChecksum: uncompressedChecksum,
@@ -99,70 +100,34 @@ type Manifest struct {
 
 	// Contains all manifest file section data without line endings.
 	//
-	// This includes custom section data and the raw, unparsed [version] and [files] data.
+	// This includes custom section data and the raw, unparsed [version] and [files] data
 	Sections map[string][][]byte
 
-	Entries []*Entry
-
-	byPath map[string]*Entry
+	entries map[string]Entry
 }
 
-func (manifest *Manifest) GetEntry(path string) (*Entry, bool) {
-	f, ok := manifest.byPath[strings.ToLower(filepath.ToSlash(path))]
+func (m Manifest) Entries() []Entry {
+	entries := []Entry{}
+	for _, entry := range m.entries {
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+func (m Manifest) GetEntry(path string) (Entry, bool) {
+	f, ok := m.entries[strings.ToLower(filepath.ToSlash(path))]
 	return f, ok
 }
 
-func (manifest *Manifest) WriteTo(w io.Writer) (int64, error) {
-	versionChecksum := md5.New()
-	fmt.Fprintf(versionChecksum, "%d", manifest.Version)
-
-	versionName := manifest.Name
-	if len(versionName) == 0 {
-		versionName = "0"
+func (m *Manifest) AddEntries(entries ...Entry) {
+	if m.entries == nil {
+		m.entries = make(map[string]Entry)
 	}
 
-	written, err := fmt.Fprintf(w, "[version]\n%d,%x,%s\n", manifest.Version, versionChecksum.Sum(nil), versionName)
-	if err != nil {
-		return 0, fmt.Errorf("manifest: write version: %w", err)
+	for _, entry := range entries {
+		entry.Path = strings.ToLower(filepath.ToSlash(entry.Path))
+		m.entries[entry.Path] = entry
 	}
-
-	if n, err := fmt.Fprintf(w, "[files]\n"); err != nil {
-		return 0, fmt.Errorf("manifest: write files: %w", err)
-	} else {
-		written += n
-	}
-
-	for _, entry := range manifest.Entries {
-		data, _ := entry.MarshalText()
-
-		if n, err := w.Write(append(data, []byte("\n")...)); err != nil {
-			return 0, fmt.Errorf("manifest: write files: %w", err)
-		} else {
-			written += n
-		}
-	}
-
-	for name, section := range manifest.Sections {
-		if name == "files" || name == "version" {
-			continue
-		}
-
-		if n, err := fmt.Fprintf(w, "[%s]\n", name); err != nil {
-			return 0, fmt.Errorf("manifest: write section: %s: %w", name, err)
-		} else {
-			written += n
-		}
-
-		for _, line := range section {
-			if n, err := fmt.Fprintf(w, "%s\n", line); err != nil {
-				return 0, fmt.Errorf("manifest: write section: %s: %w", name, err)
-			} else {
-				written += n
-			}
-		}
-	}
-
-	return int64(written), nil
 }
 
 func parseSections(r io.Reader) Sections {
@@ -233,8 +198,7 @@ func parseVersion(line []byte) (int, string, error) {
 func Read(r io.Reader) (*Manifest, error) {
 	manifest := &Manifest{
 		Sections: parseSections(r),
-		Entries:  []*Entry{},
-		byPath:   map[string]*Entry{},
+		entries:  make(map[string]Entry),
 	}
 
 	version, ok := manifest.Sections["version"]
@@ -254,19 +218,16 @@ func Read(r io.Reader) (*Manifest, error) {
 
 	files, ok := manifest.Sections["files"]
 	if !ok {
-		manifest.Entries = []*Entry{}
-		manifest.byPath = map[string]*Entry{}
 		return manifest, nil
 	}
 
 	errs := []error{}
 	for _, line := range files {
-		entry := &Entry{}
+		entry := Entry{}
 		if err := entry.UnmarshalText(line); err != nil {
 			errs = append(errs, err)
 		} else {
-			manifest.Entries = append(manifest.Entries, entry)
-			manifest.byPath[strings.ToLower(entry.Path)] = entry
+			manifest.entries[entry.Path] = entry
 		}
 	}
 
@@ -277,10 +238,62 @@ func Read(r io.Reader) (*Manifest, error) {
 	return manifest, nil
 }
 
-// Opens a file with the provided name and returns the resulting *Manifest from Read.
-// This function always closes the opened file whether Read returned an error or not.
+// Writes the provided [*Manifest] to the provided [io.Writer].
+//
+// Manifest entries are written lexicographically by their paths.
+func Write(w io.Writer, manifest *Manifest) error {
+	versionChecksum := md5.New()
+	fmt.Fprintf(versionChecksum, "%d", manifest.Version)
+
+	versionName := manifest.Name
+	if len(versionName) == 0 {
+		versionName = "0"
+	}
+
+	if _, err := fmt.Fprintf(w, "[version]\n%d,%x,%s\n", manifest.Version, versionChecksum.Sum(nil), versionName); err != nil {
+		return fmt.Errorf("manifest: write version: %w", err)
+	}
+
+	if _, err := io.WriteString(w, "[files]\n"); err != nil {
+		return fmt.Errorf("manifest: write files: %w", err)
+	}
+
+	entries := manifest.Entries()
+	slices.SortFunc(entries, func(a, b Entry) int {
+		return strings.Compare(a.Path, b.Path)
+	})
+
+	for _, entry := range entries {
+		data, _ := entry.MarshalText()
+
+		if _, err := w.Write(append(data, []byte("\n")...)); err != nil {
+			return fmt.Errorf("manifest: write files: %w", err)
+		}
+	}
+
+	for name, section := range manifest.Sections {
+		if name == "files" || name == "version" {
+			continue
+		}
+
+		if _, err := fmt.Fprint(w, "[", name, "]\n"); err != nil {
+			return fmt.Errorf("manifest: write section: %s: %w", name, err)
+		}
+
+		for _, line := range section {
+			if _, err := fmt.Fprintln(w, string(line)); err != nil {
+				return fmt.Errorf("manifest write section: %s: %w", name, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// Opens a file with the provided name and returns the resulting [*Manifest] from [Read].
+// This function always closes the opened file whether [Read] returned an error or not.
 func ReadFile(name string) (*Manifest, error) {
-	file, err := os.OpenFile(name, os.O_RDONLY, 0755)
+	file, err := os.Open(name)
 	if err != nil {
 		return nil, fmt.Errorf("manifest: %w", err)
 	}
@@ -289,17 +302,13 @@ func ReadFile(name string) (*Manifest, error) {
 	return Read(file)
 }
 
-// Writes the given *Manifest to the file specified by name.
+// Writes the given [*Manifest] to the file specified by name.
 func WriteFile(name string, manifest *Manifest) error {
-	file, err := os.OpenFile(name, os.O_WRONLY, 0755)
+	file, err := os.Create(name)
 	if err != nil {
 		return fmt.Errorf("manifest: %w", err)
 	}
 	defer file.Close()
 
-	if _, err := manifest.WriteTo(file); err != nil {
-		return err
-	}
-
-	return nil
+	return Write(file, manifest)
 }
