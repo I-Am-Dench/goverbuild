@@ -188,20 +188,34 @@ func (c *Cache) Len() (length int) {
 	return length
 }
 
+type ReadOptions struct {
+	// Ignore malformed cache data
+	IgnoreUnmarshalErrors bool
+}
+
 // Creates a [*Cache] from the entries scanned from
 // the provided [io.Reader]. Read immediately
 // returns an error if it fails to scan a line or
 // parse a quick check entry.
-func Read(r io.Reader) (*Cache, error) {
+func Read(r io.Reader, options ...ReadOptions) (*Cache, error) {
+	o := ReadOptions{}
+	if len(options) > 0 {
+		o = options[0]
+	}
+
 	scanner := bufio.NewScanner(r)
 
 	cache := &Cache{}
 	for scanner.Scan() {
 		qc := &quickCheck{}
-		if err := qc.UnmarshalText(scanner.Bytes()); err != nil {
+		if err := qc.UnmarshalText(scanner.Bytes()); err == nil {
+			cache.store(qc.path, qc)
+		} else if !o.IgnoreUnmarshalErrors {
+			// The client sometimes writes malformed manifest entries
+			// to quickcheck.txt, so we want the option to ignore those
+			// lines.
 			return nil, fmt.Errorf("cache: read: %v", err)
 		}
-		cache.store(qc.path, qc)
 	}
 
 	if scanner.Err() != nil {
@@ -234,14 +248,14 @@ func Write(w io.Writer, c *Cache) (err error) {
 // the named file. Read immediately
 // returns an error if it fails to scan a line or
 // parse a quick check entry.
-func ReadFile(name string) (*Cache, error) {
+func ReadFile(name string, options ...ReadOptions) (*Cache, error) {
 	file, err := os.Open(name)
 	if err != nil {
 		return nil, fmt.Errorf("cache: read: %w", err)
 	}
 	defer file.Close()
 
-	cache, err := Read(file)
+	cache, err := Read(file, options...)
 	if err != nil {
 		return nil, err
 	}

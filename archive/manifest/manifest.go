@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -112,6 +113,16 @@ func (m Manifest) Entries() []Entry {
 		entries = append(entries, entry)
 	}
 	return entries
+}
+
+func (m Manifest) All() iter.Seq[Entry] {
+	return func(yield func(Entry) bool) {
+		for _, entry := range m.entries {
+			if !yield(entry) {
+				break
+			}
+		}
+	}
 }
 
 func (m Manifest) GetEntry(path string) (Entry, bool) {
