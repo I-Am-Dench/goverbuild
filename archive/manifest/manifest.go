@@ -81,7 +81,7 @@ func (e *Entry) UnmarshalText(text []byte) error {
 		return &MismatchedChecksumError{entryChecksum, actual}
 	}
 
-	e.Path = strings.ToLower(filepath.ToSlash(string(matches[fieldFileName])))
+	e.Path = filepath.ToSlash(string(matches[fieldFileName]))
 	e.Info = archive.Info{
 		UncompressedSize:     uint32(uncompressedSize),
 		UncompressedChecksum: uncompressedChecksum,
@@ -136,8 +136,8 @@ func (m *Manifest) AddEntries(entries ...Entry) {
 	}
 
 	for _, entry := range entries {
-		entry.Path = strings.ToLower(filepath.ToSlash(entry.Path))
-		m.entries[entry.Path] = entry
+		entry.Path = filepath.ToSlash(entry.Path)
+		m.entries[strings.ToLower(entry.Path)] = entry
 	}
 }
 
@@ -238,7 +238,7 @@ func Read(r io.Reader) (*Manifest, error) {
 		if err := entry.UnmarshalText(line); err != nil {
 			errs = append(errs, err)
 		} else {
-			manifest.entries[entry.Path] = entry
+			manifest.entries[strings.ToLower(entry.Path)] = entry
 		}
 	}
 
