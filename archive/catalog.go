@@ -163,8 +163,10 @@ func (c *Catalog) Store(entries CatalogEntries) error {
 
 	records := []*CatalogRecord{}
 	for packName, entries := range entries {
+		packName = filepath.ToSlash(packName)
+
 		if slices.Index(c.packNames, packName) < 0 {
-			c.packNames = append(c.packNames, filepath.ToSlash(packName))
+			c.packNames = append(c.packNames, packName)
 		}
 
 		for _, entry := range entries {

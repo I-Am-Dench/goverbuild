@@ -53,7 +53,7 @@ func (c *TestCatalog) Generate(packNames []string, entries archive.CatalogEntrie
 	for packName, entries := range entries {
 		for _, entry := range entries {
 			records = append(records, &archive.CatalogRecord{
-				PackName:     packName,
+				PackName:     filepath.ToSlash(packName),
 				Crc:          archive.GetCrc(entry.Path),
 				IsCompressed: entry.IsCompressed,
 			})
@@ -110,7 +110,7 @@ func createCatalogEntries() archive.CatalogEntries {
 			}
 		}
 
-		entries[fmt.Sprint("pack", i, ".pk")] = packEntries
+		entries[filepath.Join("packs", fmt.Sprint("pack", i, ".pki"))] = packEntries
 	}
 
 	return entries
