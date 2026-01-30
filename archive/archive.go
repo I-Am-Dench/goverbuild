@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/I-Am-Dench/goverbuild/compress/segmented"
 	"github.com/snksoft/crc"
 )
 
@@ -26,7 +27,7 @@ type Info struct {
 	CompressedChecksum []byte
 }
 
-func (info Info) verify(file *os.File, expectedSize int64, expectedChecksum []byte) error {
+func (i Info) verify(file *os.File, expectedSize int64, expectedChecksum []byte) error {
 	stat, err := file.Stat()
 	if err != nil {
 		return err
@@ -44,12 +45,42 @@ func (info Info) verify(file *os.File, expectedSize int64, expectedChecksum []by
 	return nil
 }
 
-func (info Info) VerifyUncompressed(file *os.File) error {
-	return info.verify(file, int64(info.UncompressedSize), info.UncompressedChecksum)
+func (i Info) VerifyUncompressed(file *os.File) error {
+	return i.verify(file, int64(i.UncompressedSize), i.UncompressedChecksum)
 }
 
-func (info Info) VerifyCompressed(file *os.File) error {
-	return info.verify(file, int64(info.CompressedSize), info.CompressedChecksum)
+func (i Info) VerifyCompressed(file *os.File) error {
+	return i.verify(file, int64(i.CompressedSize), i.CompressedChecksum)
+}
+
+// Calculates the [Info] for the data in r and writes the
+// compressed data into compressedData.
+func CalculateInfo(r io.Reader, compressedData io.Writer) (Info, error) {
+	uncompressedChecksum := md5.New()
+	compressedChecksum := md5.New()
+
+	w := segmented.NewDataWriter(io.MultiWriter(compressedData, compressedChecksum))
+
+	uncompressedSize, err := io.Copy(io.MultiWriter(w, uncompressedChecksum), r)
+	if err != nil {
+		return Info{}, fmt.Errorf("calculate info: %w", err)
+	}
+
+	if err := w.Close(); err != nil {
+		return Info{}, fmt.Errorf("calculate info: %w", err)
+	}
+
+	return Info{
+		UncompressedSize:     uint32(uncompressedSize),
+		UncompressedChecksum: uncompressedChecksum.Sum(nil),
+
+		CompressedSize:     uint32(w.BytesWritten()),
+		CompressedChecksum: compressedChecksum.Sum(nil),
+	}, nil
+}
+
+func CalculateBytesInfo(data []byte) (Info, error) {
+	return CalculateInfo(bytes.NewReader(data), io.Discard)
 }
 
 var crcTable = crc.NewTable(&crc.Parameters{
