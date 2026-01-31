@@ -22,7 +22,7 @@ func TestCalculateInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	info, err := archive.CalculateInfo(bytes.NewReader(data), io.Discard)
+	info, err := archive.CalculateInfoFromReader(bytes.NewReader(data), io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}

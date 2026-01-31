@@ -55,7 +55,7 @@ func (i Info) VerifyCompressed(file *os.File) error {
 
 // Calculates the [Info] for the data in r and writes the
 // compressed data into compressedData.
-func CalculateInfo(r io.Reader, compressedData io.Writer) (Info, error) {
+func CalculateInfoFromReader(r io.Reader, compressedData io.Writer) (Info, error) {
 	uncompressedChecksum := md5.New()
 	compressedChecksum := md5.New()
 
@@ -79,8 +79,8 @@ func CalculateInfo(r io.Reader, compressedData io.Writer) (Info, error) {
 	}, nil
 }
 
-func CalculateBytesInfo(data []byte) (Info, error) {
-	return CalculateInfo(bytes.NewReader(data), io.Discard)
+func CalculateInfo(data []byte) (Info, error) {
+	return CalculateInfoFromReader(bytes.NewReader(data), io.Discard)
 }
 
 var crcTable = crc.NewTable(&crc.Parameters{
