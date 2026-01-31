@@ -65,7 +65,7 @@ func (e *TextEncoder) encode(buf *bytes.Buffer, key string, valueType ValueType,
 	return nil
 }
 
-func (e *TextEncoder) getEncoding(value reflect.Value, raw bool) (string, ValueType, error) {
+func (e TextEncoder) getEncoding(value reflect.Value, raw bool) (string, ValueType, error) {
 	if value.Type() == string16Type {
 		return value.Interface().(String16).String(), ValueTypeString, nil
 	}

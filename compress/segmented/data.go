@@ -99,7 +99,7 @@ func (w *DataWriter) Write(p []byte) (n int, err error) {
 	return n, nil
 }
 
-func (w *DataWriter) BytesWritten() int64 {
+func (w DataWriter) BytesWritten() int64 {
 	return w.compressedBytes + int64(len(dataSignature))
 }
 

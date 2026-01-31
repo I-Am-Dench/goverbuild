@@ -117,11 +117,11 @@ type Archive struct {
 	packs   map[string]*Pack
 }
 
-func (a *Archive) Catalog() *Catalog {
+func (a Archive) Catalog() *Catalog {
 	return a.catalog
 }
 
-func (a *Archive) createIfNotExist(path string) error {
+func (a Archive) createIfNotExist(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func (a *Archive) Load(path string) (*PackRecord, error) {
 // all errors returned by each [*Pack.Close], and then closes
 // the underlying [*Catalog] ONLY if the [Archive] was created
 // through a call to Open.
-func (a *Archive) Close() error {
+func (a Archive) Close() error {
 	errs := []error{}
 	for _, pack := range a.packs {
 		if err := pack.Close(); err != nil {

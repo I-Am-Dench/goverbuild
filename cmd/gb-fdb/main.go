@@ -19,7 +19,7 @@ var (
 
 type verboseWriter struct{}
 
-func (v *verboseWriter) Write(b []byte) (int, error) {
+func (v verboseWriter) Write(b []byte) (int, error) {
 	if VerboseFlag {
 		return os.Stdout.Write(b)
 	} else {
@@ -29,7 +29,7 @@ func (v *verboseWriter) Write(b []byte) (int, error) {
 
 var (
 	Error   = log.New(os.Stderr, "gd-fdb: ", 0)
-	Verbose = log.New(&verboseWriter{}, "gd-fdb: ", 0)
+	Verbose = log.New(verboseWriter{}, "gd-fdb: ", 0)
 )
 
 type Exclude struct {

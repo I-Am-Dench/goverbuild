@@ -42,7 +42,7 @@ func NewBuilder(w io.WriteSeeker, tables []*Table) *Builder {
 	}
 }
 
-func (b *Builder) writeDescription(w *writer, table *Table) (err error) {
+func (b Builder) writeDescription(w *writer, table *Table) (err error) {
 	defer func() {
 		if err == nil {
 			err = w.Flush()
@@ -74,7 +74,7 @@ func (b *Builder) writeDescription(w *writer, table *Table) (err error) {
 	return nil
 }
 
-func (b *Builder) collectBuckets(table *Table, f RowsFunc) ([][]Row, error) {
+func (b Builder) collectBuckets(table *Table, f RowsFunc) ([][]Row, error) {
 	if len(table.Columns) == 0 {
 		return [][]Row{}, nil
 	}
@@ -108,7 +108,7 @@ func (b *Builder) collectBuckets(table *Table, f RowsFunc) ([][]Row, error) {
 	return buckets, nil
 }
 
-func (b *Builder) writeEntry(w *writer, entry Entry) error {
+func (b Builder) writeEntry(w *writer, entry Entry) error {
 	if err := w.PutUint32(uint32(entry.Variant())); err != nil {
 		return fmt.Errorf("variant: %v", entry.Variant())
 	}
@@ -167,7 +167,7 @@ func (b *Builder) writeEntry(w *writer, entry Entry) error {
 	return nil
 }
 
-func (b *Builder) writeRow(w *writer, row Row) (err error) {
+func (b Builder) writeRow(w *writer, row Row) (err error) {
 	defer func() {
 		if err == nil {
 			err = w.Flush()
@@ -195,7 +195,7 @@ func (b *Builder) writeRow(w *writer, row Row) (err error) {
 	return nil
 }
 
-func (b *Builder) writeBucket(w *writer, bucket []Row) error {
+func (b Builder) writeBucket(w *writer, bucket []Row) error {
 	return w.DeferredArray(2, func(w *deferredwriter.Writer, i int) (hasData bool, err error) {
 		if i == 0 {
 			return true, b.writeRow(w, bucket[0])
@@ -208,7 +208,7 @@ func (b *Builder) writeBucket(w *writer, bucket []Row) error {
 	}, false, 0xff)
 }
 
-func (b *Builder) writeBuckets(buckets [][]Row) deferredwriter.DeferredArrayFunc {
+func (b Builder) writeBuckets(buckets [][]Row) deferredwriter.DeferredArrayFunc {
 	return func(w *deferredwriter.Writer, i int) (hasData bool, err error) {
 		bucket := buckets[i]
 		if len(bucket) == 0 {
@@ -223,7 +223,7 @@ func (b *Builder) writeBuckets(buckets [][]Row) deferredwriter.DeferredArrayFunc
 	}
 }
 
-func (b *Builder) writeRows(w *writer, table *Table, rows RowsFunc) error {
+func (b Builder) writeRows(w *writer, table *Table, rows RowsFunc) error {
 	buckets, err := b.collectBuckets(table, rows)
 	if err != nil {
 		return fmt.Errorf("buckets: %v", err)
@@ -246,7 +246,7 @@ func (b *Builder) writeRows(w *writer, table *Table, rows RowsFunc) error {
 // The first [Entry] in a [Row], returned by the [iter.Seq2]
 // of the provided [RowsFunc], MUST NOT have a variant
 // equal to [VariantNull].
-func (b *Builder) Flush(rows RowsFunc) error {
+func (b Builder) Flush(rows RowsFunc) error {
 	n, err := b.w.Seek(0, io.SeekCurrent)
 	if err != nil {
 		return err

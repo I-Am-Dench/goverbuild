@@ -39,7 +39,7 @@ func NewFdbTable(w io.Writer, columns []*fdb.Column, withColumnTypes bool) *FdbT
 	return &FdbTable{tab, columns}
 }
 
-func (t *FdbTable) Row(row fdb.Row) {
+func (t FdbTable) Row(row fdb.Row) {
 	for i := 0; i < len(t.Columns); i++ {
 		entry, err := row.Column(i)
 		if err != nil {
@@ -102,7 +102,7 @@ func NewCsvTable(w io.Writer, columns []*fdb.Column, withHeader bool) *CsvTable 
 	return &CsvTable{c, columns}
 }
 
-func (c *CsvTable) Row(row fdb.Row) {
+func (c CsvTable) Row(row fdb.Row) {
 	record := make([]string, len(c.Columns))
 
 	for i := 0; i < len(c.Columns); i++ {
@@ -152,7 +152,7 @@ func (c *CsvTable) Row(row fdb.Row) {
 	c.Write(record)
 }
 
-func (c *CsvTable) Flush() error {
+func (c CsvTable) Flush() error {
 	c.Writer.Flush()
 	return c.Writer.Error()
 }

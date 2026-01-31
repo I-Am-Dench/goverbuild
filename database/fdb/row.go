@@ -7,14 +7,14 @@ import (
 
 type Row []Entry
 
-func (r *Row) Column(i int) (Entry, error) {
-	if i >= len(*r) {
+func (r Row) Column(i int) (Entry, error) {
+	if i >= len(r) {
 		return nil, fmt.Errorf("out of range: %d", i)
 	}
-	return (*r)[i], nil
+	return r[i], nil
 }
 
-func (r *Row) Value(i int) (any, error) {
+func (r Row) Value(i int) (any, error) {
 	col, err := r.Column(i)
 	if err != nil {
 		return nil, err

@@ -62,7 +62,7 @@ func (d *TextDecoder) splitDelim(data []byte, atEOF bool) (advance int, token []
 	return 0, nil, nil
 }
 
-func (d *TextDecoder) decodeToken(rawToken []byte) (Token, error) {
+func (d TextDecoder) decodeToken(rawToken []byte) (Token, error) {
 	key, valueWithType, ok := bytes.Cut(rawToken, []byte("="))
 	if !ok {
 		return Token{}, fmt.Errorf("missing key-value pair: %s", rawToken)
@@ -113,11 +113,11 @@ func (d *TextDecoder) Next() bool {
 	return false
 }
 
-func (d *TextDecoder) Token() Token {
+func (d TextDecoder) Token() Token {
 	return d.token
 }
 
-func (d *TextDecoder) Err() error {
+func (d TextDecoder) Err() error {
 	return d.err
 }
 
@@ -136,7 +136,7 @@ func (d *TextDecoder) tokens() (map[string]Token, error) {
 	return tokens, nil
 }
 
-func (d *TextDecoder) getUnmarshaler(value reflect.Value) (encoding.TextUnmarshaler, bool) {
+func (d TextDecoder) getUnmarshaler(value reflect.Value) (encoding.TextUnmarshaler, bool) {
 	if value.Kind() != reflect.Pointer {
 		value = value.Addr()
 	}
@@ -148,7 +148,7 @@ func (d *TextDecoder) getUnmarshaler(value reflect.Value) (encoding.TextUnmarsha
 	return nil, false
 }
 
-func (d *TextDecoder) getValue(token Token, valueType reflect.Type) (reflect.Value, error) {
+func (d TextDecoder) getValue(token Token, valueType reflect.Type) (reflect.Value, error) {
 	switch token.Type {
 	case ValueTypeString:
 		if valueType == string16Type || (valueType.Kind() == reflect.Slice && valueType.Elem().Kind() == reflect.Uint16) {
@@ -213,7 +213,7 @@ func (d *TextDecoder) getValue(token Token, valueType reflect.Type) (reflect.Val
 	}
 }
 
-func (d *TextDecoder) setStructField(value reflect.Value, token Token) (err error) {
+func (d TextDecoder) setStructField(value reflect.Value, token Token) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("%v", r)
@@ -236,7 +236,7 @@ func (d *TextDecoder) setStructField(value reflect.Value, token Token) (err erro
 	return nil
 }
 
-func (d *TextDecoder) decodeStruct(structValue reflect.Value, tokens map[string]Token) error {
+func (d TextDecoder) decodeStruct(structValue reflect.Value, tokens map[string]Token) error {
 	typeInfo := getTypeInfo(structValue.Type())
 	for i, field := range typeInfo.fields {
 		if field.ignore {
@@ -268,7 +268,7 @@ func (d *TextDecoder) decodeStruct(structValue reflect.Value, tokens map[string]
 	return nil
 }
 
-func (d *TextDecoder) setMapValue(mapValue reflect.Value, token Token) (err error) {
+func (d TextDecoder) setMapValue(mapValue reflect.Value, token Token) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("%v", r)

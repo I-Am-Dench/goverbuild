@@ -52,15 +52,15 @@ type Catalog struct {
 	records   []*CatalogRecord
 }
 
-func (c *Catalog) PackNames() []string {
+func (c Catalog) PackNames() []string {
 	return c.packNames
 }
 
-func (c *Catalog) Records() []*CatalogRecord {
+func (c Catalog) Records() []*CatalogRecord {
 	return c.records
 }
 
-func (c *Catalog) Search(path string) (*CatalogRecord, bool) {
+func (c Catalog) Search(path string) (*CatalogRecord, bool) {
 	crc := GetCrc(path)
 
 	i := sort.Search(len(c.records), func(i int) bool { return c.records[i].Crc >= crc })
@@ -70,7 +70,7 @@ func (c *Catalog) Search(path string) (*CatalogRecord, bool) {
 	return nil, false
 }
 
-func (c *Catalog) readPackNames() ([]string, error) {
+func (c Catalog) readPackNames() ([]string, error) {
 	var numFiles uint32
 	if err := binary.Read(c.f, order, &numFiles); err != nil {
 		return nil, fmt.Errorf("read pack names: %v", err)
@@ -94,7 +94,7 @@ func (c *Catalog) readPackNames() ([]string, error) {
 	return names, nil
 }
 
-func (c *Catalog) readRecord(packNames []string) (*CatalogRecord, error) {
+func (c Catalog) readRecord(packNames []string) (*CatalogRecord, error) {
 	data := [20]byte{}
 	if _, err := c.f.Read(data[:]); err != nil {
 		return nil, fmt.Errorf("read record: %v", err)
@@ -122,7 +122,7 @@ func (c *Catalog) readRecord(packNames []string) (*CatalogRecord, error) {
 	return record, nil
 }
 
-func (c *Catalog) readRecords(packNames []string) ([]*CatalogRecord, error) {
+func (c Catalog) readRecords(packNames []string) ([]*CatalogRecord, error) {
 	var numRecords uint32
 	if err := binary.Read(c.f, order, &numRecords); err != nil {
 		return nil, fmt.Errorf("read records: %v", err)
@@ -188,7 +188,7 @@ func (c *Catalog) Store(entries CatalogEntries) error {
 	return nil
 }
 
-func (c *Catalog) writePackNames() (map[string]int, error) {
+func (c Catalog) writePackNames() (map[string]int, error) {
 	buf := []byte{}
 	buf = order.AppendUint32(buf, uint32(len(c.packNames)))
 
@@ -206,7 +206,7 @@ func (c *Catalog) writePackNames() (map[string]int, error) {
 	return indices, nil
 }
 
-func (c *Catalog) writeRecord(record *CatalogRecord, indices map[string]int) error {
+func (c Catalog) writeRecord(record *CatalogRecord, indices map[string]int) error {
 	const recordSize = 20
 
 	i, ok := indices[record.PackName]

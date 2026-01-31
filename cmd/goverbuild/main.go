@@ -9,7 +9,7 @@ var VerboseFlag bool
 
 type verboseWriter struct{}
 
-func (v *verboseWriter) Write(b []byte) (int, error) {
+func (v verboseWriter) Write(b []byte) (int, error) {
 	if VerboseFlag {
 		return os.Stdout.Write(b)
 	} else {
@@ -20,7 +20,7 @@ func (v *verboseWriter) Write(b []byte) (int, error) {
 var (
 	Info    = log.New(os.Stdout, "goverbuild: ", 0)
 	Error   = log.New(os.Stderr, "goverbuild: ", 0)
-	Verbose = log.New(&verboseWriter{}, "goverbuild: ", 0)
+	Verbose = log.New(verboseWriter{}, "goverbuild: ", 0)
 )
 
 func SetLogPrefix(prefix string) {

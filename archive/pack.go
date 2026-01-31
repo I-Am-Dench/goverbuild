@@ -37,7 +37,7 @@ type PackRecord struct {
 // Returns an [io.Reader] for the record's uncompressed data.
 // If the record is compressed, Section returns an error if it fails
 // to create an sd0 decompressor.
-func (r *PackRecord) Section() (io.Reader, error) {
+func (r PackRecord) Section() (io.Reader, error) {
 	reader := r.Raw()
 
 	if r.IsCompressed {
@@ -68,7 +68,7 @@ func (r *PackRecord) Section() (io.Reader, error) {
 //	}
 //
 //	fmt.Println(hash.Sum(nil)) // The final hash
-func (r *PackRecord) SectionWithHash() (io.Reader, hash.Hash, error) {
+func (r PackRecord) SectionWithHash() (io.Reader, hash.Hash, error) {
 	reader, err := r.Section()
 	if err != nil {
 		return nil, nil, err
@@ -80,11 +80,11 @@ func (r *PackRecord) SectionWithHash() (io.Reader, hash.Hash, error) {
 }
 
 // Returns an [io.Reader] for the record's uncompressed or compressed data.
-func (r *PackRecord) Raw() io.Reader {
+func (r PackRecord) Raw() io.Reader {
 	return io.NewSectionReader(r.r, int64(r.dataPointer), int64(r.DataSize()))
 }
 
-func (r *PackRecord) DataSize() uint32 {
+func (r PackRecord) DataSize() uint32 {
 	if r.IsCompressed {
 		return r.CompressedSize
 	} else {
@@ -92,13 +92,13 @@ func (r *PackRecord) DataSize() uint32 {
 	}
 }
 
-func (r *PackRecord) appendChecksum(buf, checksum []byte) []byte {
+func (r PackRecord) appendChecksum(buf, checksum []byte) []byte {
 	data := [36]byte{}
 	hex.Encode(data[:32], checksum)
 	return append(buf, data[:]...)
 }
 
-func (r *PackRecord) AppendBinary(b []byte) ([]byte, error) {
+func (r PackRecord) AppendBinary(b []byte) ([]byte, error) {
 	const recordSize = 100
 
 	buf := make([]byte, 0, recordSize)
@@ -122,11 +122,11 @@ func (r *PackRecord) AppendBinary(b []byte) ([]byte, error) {
 	return append(b, buf...), nil
 }
 
-func (r *PackRecord) MarshalBinary() (data []byte, err error) {
+func (r PackRecord) MarshalBinary() (data []byte, err error) {
 	return r.AppendBinary([]byte{})
 }
 
-func (r *PackRecord) DataPointer() uint32 {
+func (r PackRecord) DataPointer() uint32 {
 	return r.dataPointer
 }
 
@@ -161,7 +161,7 @@ func (p *Pack) Records() []*PackRecord {
 	return p.records
 }
 
-func (p *Pack) Revision() uint32 {
+func (p Pack) Revision() uint32 {
 	return p.revision
 }
 
@@ -232,7 +232,7 @@ func (p *Pack) updateRecord(records []*PackRecord, index int, info Info, compres
 	return nil
 }
 
-func (p *Pack) writeRecords(w io.Writer, records []*PackRecord) (n int64, err error) {
+func (p Pack) writeRecords(w io.Writer, records []*PackRecord) (n int64, err error) {
 	if err := binary.Write(w, order, uint32(len(records))); err != nil {
 		return 0, err
 	}
@@ -415,7 +415,7 @@ func (p *Pack) WriteTo(w io.Writer) (n int64, err error) {
 	return n, nil
 }
 
-func (p *Pack) readHash(r io.Reader) ([]byte, error) {
+func (p Pack) readHash(r io.Reader) ([]byte, error) {
 	buf := [36]byte{}
 	if _, err := r.Read(buf[:]); err != nil {
 		return nil, err

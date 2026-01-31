@@ -28,23 +28,23 @@ type readerEntry struct {
 	variant Variant
 }
 
-func (e *readerEntry) Variant() Variant {
+func (e readerEntry) Variant() Variant {
 	return e.variant
 }
 
-func (e *readerEntry) Int32() int32 {
+func (e readerEntry) Int32() int32 {
 	return int32(e.data)
 }
 
-func (e *readerEntry) Uint32() uint32 {
+func (e readerEntry) Uint32() uint32 {
 	return uint32(e.data)
 }
 
-func (e *readerEntry) Float32() float32 {
+func (e readerEntry) Float32() float32 {
 	return math.Float32frombits(e.data)
 }
 
-func (e *readerEntry) String() (s string, err error) {
+func (e readerEntry) String() (s string, err error) {
 	if _, err := e.r.Seek(int64(e.data), io.SeekStart); err != nil {
 		return "", err
 	}
@@ -57,11 +57,11 @@ func (e *readerEntry) String() (s string, err error) {
 	return s, nil
 }
 
-func (e *readerEntry) Bool() bool {
+func (e readerEntry) Bool() bool {
 	return e.data != 0
 }
 
-func (e *readerEntry) Int64() (v int64, err error) {
+func (e readerEntry) Int64() (v int64, err error) {
 	if _, err := e.r.Seek(int64(e.data), io.SeekStart); err != nil {
 		return 0, err
 	}
@@ -73,7 +73,7 @@ func (e *readerEntry) Int64() (v int64, err error) {
 	return v, nil
 }
 
-func (e *readerEntry) Uint64() (v uint64, err error) {
+func (e readerEntry) Uint64() (v uint64, err error) {
 	if _, err := e.r.Seek(int64(e.data), io.SeekStart); err != nil {
 		return 0, err
 	}
@@ -92,39 +92,39 @@ type DataEntry struct {
 	data    any
 }
 
-func (e *DataEntry) Variant() Variant {
+func (e DataEntry) Variant() Variant {
 	return e.variant
 }
 
-func (e *DataEntry) Int32() int32 {
+func (e DataEntry) Int32() int32 {
 	return e.data.(int32)
 }
 
-func (e *DataEntry) Uint32() uint32 {
+func (e DataEntry) Uint32() uint32 {
 	return e.data.(uint32)
 }
 
-func (e *DataEntry) Float32() float32 {
+func (e DataEntry) Float32() float32 {
 	return e.data.(float32)
 }
 
-func (e *DataEntry) String() (string, error) {
+func (e DataEntry) String() (string, error) {
 	return e.data.(string), nil
 }
 
-func (e *DataEntry) Bool() bool {
+func (e DataEntry) Bool() bool {
 	return e.data.(bool)
 }
 
-func (e *DataEntry) Int64() (int64, error) {
+func (e DataEntry) Int64() (int64, error) {
 	return e.data.(int64), nil
 }
 
-func (e *DataEntry) Uint64() (uint64, error) {
+func (e DataEntry) Uint64() (uint64, error) {
 	return e.data.(uint64), nil
 }
 
-func (e *DataEntry) IsNull() bool {
+func (e DataEntry) IsNull() bool {
 	return e.data == nil
 }
 

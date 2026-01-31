@@ -89,11 +89,11 @@ func (b *Bucket) Next() bool {
 	return b.err == nil
 }
 
-func (b *Bucket) Row() Row {
+func (b Bucket) Row() Row {
 	return b.row
 }
 
-func (b *Bucket) Err() error {
+func (b Bucket) Err() error {
 	return b.err
 }
 
@@ -123,7 +123,7 @@ type Rows struct {
 // Returns the [*Bucket] located at index, i. Bucket panics
 // if i >= # of buckets. If no bucket exists at i, Bucket returns
 // an [ErrNullData] error.
-func (r *Rows) Bucket(i int) (*Bucket, error) {
+func (r Rows) Bucket(i int) (*Bucket, error) {
 	if i >= r.numBuckets {
 		panic(fmt.Errorf("fdb: rows: bucket: out of range: %d", i))
 	}
@@ -217,14 +217,14 @@ func (r *Rows) Reset() error {
 	return nil
 }
 
-func (r *Rows) Row() Row {
+func (r Rows) Row() Row {
 	if r.bucket == nil {
 		return nil
 	}
 	return r.bucket.Row()
 }
 
-func (r *Rows) Err() error {
+func (r Rows) Err() error {
 	if r.bucket == nil {
 		return nil
 	}
@@ -267,7 +267,7 @@ type HashTable struct {
 // Returns the [*Bucket] located at index, i. Bucket panics
 // if i >= # of buckets. If no bucket exists at i, Bucket returns
 // an [ErrNullData] error.
-func (h *HashTable) Bucket(i int) (*Bucket, error) {
+func (h HashTable) Bucket(i int) (*Bucket, error) {
 	if i >= h.numBuckets {
 		panic(fmt.Errorf("fdb: hash table: bucket: out of range: %d", i))
 	}
@@ -298,7 +298,7 @@ func (h *HashTable) Bucket(i int) (*Bucket, error) {
 
 // Returns the first row corresponding to the provided id.
 // If no row exists, Find returns a wrapped [ErrRowNotFound] error.
-func (h *HashTable) Find(id int) (Row, error) {
+func (h HashTable) Find(id int) (Row, error) {
 	bucket, err := h.Bucket(id % h.numBuckets)
 	if errors.Is(err, ErrNullData) {
 		return nil, fmt.Errorf("hash table: %w", ErrRowNotFound)
@@ -329,11 +329,11 @@ func (h *HashTable) Find(id int) (Row, error) {
 }
 
 // Returns the first row corresponding to the provided id.
-func (h *HashTable) FindString(id string) (Row, error) {
+func (h HashTable) FindString(id string) (Row, error) {
 	return h.Find(int(Sfhash([]byte(id))))
 }
 
-func (h *HashTable) Rows() (*Rows, error) {
+func (h HashTable) Rows() (*Rows, error) {
 	r := &Rows{
 		r: h.r,
 

@@ -18,7 +18,7 @@ func NewSqlite(db *sql.DB) Converter {
 	return &Sqlite{db}
 }
 
-func (db *Sqlite) toVariant(colType string) (fdb.Variant, bool) {
+func (db Sqlite) toVariant(colType string) (fdb.Variant, bool) {
 	switch strings.ToUpper(colType) {
 	case "INTEGER", "INT", "INT32":
 		return fdb.VariantI32, true
@@ -37,7 +37,7 @@ func (db *Sqlite) toVariant(colType string) (fdb.Variant, bool) {
 	}
 }
 
-func (db *Sqlite) toColType(variant fdb.Variant) (string, bool) {
+func (db Sqlite) toColType(variant fdb.Variant) (string, bool) {
 	switch variant {
 	case fdb.VariantI32:
 		return "INT32", true
@@ -64,7 +64,7 @@ func moveToFront(columns []*fdb.Column, i int) {
 	}
 }
 
-func (db *Sqlite) queryTable(name string, exclude *Exclude) (*fdb.Table, error) {
+func (db Sqlite) queryTable(name string, exclude *Exclude) (*fdb.Table, error) {
 	query := "SELECT name, type, pk FROM pragma_table_info(?)"
 	Verbose.Print(name, ": ", query)
 
@@ -120,7 +120,7 @@ func (db *Sqlite) queryTable(name string, exclude *Exclude) (*fdb.Table, error) 
 	return table, nil
 }
 
-func (db *Sqlite) collectTables(excludes map[string]*Exclude) ([]*fdb.Table, error) {
+func (db Sqlite) collectTables(excludes map[string]*Exclude) ([]*fdb.Table, error) {
 	query := "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
 	Verbose.Println(query)
 
@@ -158,7 +158,7 @@ func (db *Sqlite) collectTables(excludes map[string]*Exclude) ([]*fdb.Table, err
 	return tables, nil
 }
 
-func (db *Sqlite) WriteFdb(w io.WriteSeeker, excludes map[string]*Exclude) error {
+func (db Sqlite) WriteFdb(w io.WriteSeeker, excludes map[string]*Exclude) error {
 	tables, err := db.collectTables(excludes)
 	if err != nil {
 		return fmt.Errorf("sqlite3: %v", err)
@@ -177,7 +177,7 @@ func (db *Sqlite) WriteFdb(w io.WriteSeeker, excludes map[string]*Exclude) error
 	return nil
 }
 
-func (db *Sqlite) dropTables(tables []*fdb.Table) error {
+func (db Sqlite) dropTables(tables []*fdb.Table) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -200,7 +200,7 @@ func (db *Sqlite) dropTables(tables []*fdb.Table) error {
 	return nil
 }
 
-func (db *Sqlite) rowValues(row fdb.Row, values []any) error {
+func (db Sqlite) rowValues(row fdb.Row, values []any) error {
 	for i := range values {
 		v, err := row.Value(i)
 		if err != nil {
@@ -212,7 +212,7 @@ func (db *Sqlite) rowValues(row fdb.Row, values []any) error {
 	return nil
 }
 
-func (db *Sqlite) createTable(table *fdb.Table) error {
+func (db Sqlite) createTable(table *fdb.Table) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -277,7 +277,7 @@ func (db *Sqlite) createTable(table *fdb.Table) error {
 	return nil
 }
 
-func (db *Sqlite) ReadFdb(r *fdb.Reader) error {
+func (db Sqlite) ReadFdb(r *fdb.Reader) error {
 	if err := db.dropTables(r.Tables()); err != nil {
 		return err
 	}
@@ -291,7 +291,7 @@ func (db *Sqlite) ReadFdb(r *fdb.Reader) error {
 	return nil
 }
 
-func (db *Sqlite) GetExcludeTable(tableName string) (map[string]*Exclude, error) {
+func (db Sqlite) GetExcludeTable(tableName string) (map[string]*Exclude, error) {
 	excludes := make(map[string]*Exclude)
 
 	query := fmt.Sprint("SELECT \"table\", \"column\" FROM ", tableName)

@@ -44,11 +44,11 @@ type quickCheck struct {
 	checksum []byte
 }
 
-func (q *quickCheck) MarshalText() ([]byte, error) {
+func (q quickCheck) MarshalText() ([]byte, error) {
 	return fmt.Appendf([]byte{}, "%s,%s,%d,%x\n", q.path, FormatTime(q.modTime), q.size, q.Checksum()), nil
 }
 
-func (q *quickCheck) parseModTime(s string) (time.Time, error) {
+func (q quickCheck) parseModTime(s string) (time.Time, error) {
 	rawSeconds, rawNanoseconds, ok := strings.Cut(s, ".")
 	if !ok {
 		return time.Time{}, errors.New("parse mod time: no nanoseconds")
@@ -92,23 +92,23 @@ func (q *quickCheck) UnmarshalText(text []byte) error {
 	return nil
 }
 
-func (q *quickCheck) Path() string {
+func (q quickCheck) Path() string {
 	return q.path
 }
 
-func (q *quickCheck) ModTime() time.Time {
+func (q quickCheck) ModTime() time.Time {
 	return q.modTime
 }
 
-func (q *quickCheck) Size() int64 {
+func (q quickCheck) Size() int64 {
 	return q.size
 }
 
-func (q *quickCheck) Checksum() []byte {
+func (q quickCheck) Checksum() []byte {
 	return q.checksum
 }
 
-func (q *quickCheck) Check(stat os.FileInfo, info archive.Info) error {
+func (q quickCheck) Check(stat os.FileInfo, info archive.Info) error {
 	if !RoundTime(stat.ModTime()).Equal(q.modTime) || stat.Size() != q.size {
 		return fmt.Errorf("entry does not match stat: (expected: %s,%d) != (actual: %s,%d)", FormatTime(q.modTime), q.size, FormatTime(stat.ModTime()), stat.Size())
 	}

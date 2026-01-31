@@ -95,10 +95,10 @@ func testWriteChunkSize(t *testing.T, data []byte, chunkSize int) {
 	expected := compress(data, chunkSize)
 	t.Logf("data writer: expecting %d compressed bytes", expected.Len())
 
-	actual := &bytes.Buffer{}
+	actual := bytes.Buffer{}
 
 	buf := bytes.NewBuffer(data)
-	writer := segmented.NewDataWriterSize(actual, chunkSize)
+	writer := segmented.NewDataWriterSize(&actual, chunkSize)
 
 	if _, err := io.Copy(writer, buf); err != nil {
 		t.Fatalf("data writer: %v", err)
@@ -116,13 +116,13 @@ func testWriteChunkSize(t *testing.T, data []byte, chunkSize int) {
 
 	if expected.Len() != actual.Len() {
 		t.Errorf("data writer: expected %d bytes but got %d", expected.Len(), actual.Len())
-		dump(expected, actual)
+		dump(expected, &actual)
 		return
 	}
 
 	if !bytes.Equal(expected.Bytes(), actual.Bytes()) {
 		t.Errorf("data writer: data does not match")
-		dump(expected, actual)
+		dump(expected, &actual)
 		return
 	}
 }

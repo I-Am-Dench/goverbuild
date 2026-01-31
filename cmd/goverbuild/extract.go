@@ -22,7 +22,7 @@ type Extractor struct {
 	Archive *archive.Archive
 }
 
-func (e *Extractor) LogFatal(format string, a ...any) {
+func (e Extractor) LogFatal(format string, a ...any) {
 	if e.IgnoreErrors {
 		Verbose.Printf(format, a...)
 	} else {
@@ -30,7 +30,7 @@ func (e *Extractor) LogFatal(format string, a ...any) {
 	}
 }
 
-func (e *Extractor) Extract(path string) {
+func (e Extractor) Extract(path string) {
 	if filepath.Ext(path) == ".pk" {
 		return
 	}

@@ -19,11 +19,11 @@ type Table struct {
 	hashTable *HashTable
 }
 
-func (t *Table) HashTable() *HashTable {
+func (t Table) HashTable() *HashTable {
 	return t.hashTable
 }
 
-func (t *Table) Rows() iter.Seq2[Row, error] {
+func (t Table) Rows() iter.Seq2[Row, error] {
 	return func(yield func(Row, error) bool) {
 		if t.hashTable == nil {
 			return
@@ -58,11 +58,11 @@ type Reader struct {
 	tables []*Table
 }
 
-func (r *Reader) Tables() []*Table {
+func (r Reader) Tables() []*Table {
 	return r.tables
 }
 
-func (r *Reader) FindTable(name string) (*Table, bool) {
+func (r Reader) FindTable(name string) (*Table, bool) {
 	for _, table := range r.tables {
 		if table.Name == name {
 			return table, true
@@ -71,7 +71,7 @@ func (r *Reader) FindTable(name string) (*Table, bool) {
 	return nil, false
 }
 
-func (r *Reader) readColumns(rs io.ReadSeeker, offset uint32, numColumns int) ([]*Column, error) {
+func (r Reader) readColumns(rs io.ReadSeeker, offset uint32, numColumns int) ([]*Column, error) {
 	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("read columns: %v", err)
 	}
@@ -111,7 +111,7 @@ func (r *Reader) readColumns(rs io.ReadSeeker, offset uint32, numColumns int) ([
 	return columns, nil
 }
 
-func (r *Reader) readHashTable(rs io.ReadSeeker, offset uint32) (*HashTable, error) {
+func (r Reader) readHashTable(rs io.ReadSeeker, offset uint32) (*HashTable, error) {
 	if _, err := rs.Seek(int64(offset), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("read hash table: %v", err)
 	}
@@ -131,7 +131,7 @@ func (r *Reader) readHashTable(rs io.ReadSeeker, offset uint32) (*HashTable, err
 	}, nil
 }
 
-func (r *Reader) readTable(rs io.ReadSeeker, description, hashTable uint32) (*Table, error) {
+func (r Reader) readTable(rs io.ReadSeeker, description, hashTable uint32) (*Table, error) {
 	if _, err := rs.Seek(int64(description), io.SeekStart); err != nil {
 		return nil, fmt.Errorf("read table: %v", err)
 	}
@@ -208,7 +208,7 @@ func (r *Reader) init() error {
 
 // Closes the underlying [*os.File] only if the Reader
 // was created by a call to [OpenReader].
-func (r *Reader) Close() error {
+func (r Reader) Close() error {
 	if r.closer {
 		return r.f.Close()
 	}

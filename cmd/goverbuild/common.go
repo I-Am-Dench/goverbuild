@@ -10,9 +10,9 @@ import (
 
 type CommandList map[string]func(args []string)
 
-func (list *CommandList) Usage() {
+func (list CommandList) Usage() {
 	keys := []string{}
-	for key := range *list {
+	for key := range list {
 		keys = append(keys, key)
 	}
 

@@ -40,7 +40,7 @@ type Entry struct {
 	archive.Info
 }
 
-func (e *Entry) MarshalText() ([]byte, error) {
+func (e Entry) MarshalText() ([]byte, error) {
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "%s,%d,%x,%d,%x", e.Path, e.UncompressedSize, e.UncompressedChecksum, e.CompressedSize, e.CompressedChecksum)
 
