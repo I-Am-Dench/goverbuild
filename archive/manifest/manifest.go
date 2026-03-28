@@ -10,7 +10,6 @@ import (
 	"io"
 	"iter"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -38,6 +37,15 @@ type Sections = map[string][][]byte
 type Entry struct {
 	Path string
 	archive.Info
+}
+
+// Replaces all occurences of a backslash ('\') with
+// a forward slash ('/').
+//
+// This differs from [filepath.ToSlash] which replaces all
+// occurences of [os.PathSeparator] with a forward slash ('/').
+func toSlash(path string) string {
+	return strings.ReplaceAll(path, "\\", "/")
 }
 
 func (e Entry) MarshalText() ([]byte, error) {
@@ -81,7 +89,7 @@ func (e *Entry) UnmarshalText(text []byte) error {
 		return &MismatchedChecksumError{entryChecksum, actual}
 	}
 
-	e.Path = filepath.ToSlash(string(matches[fieldFileName]))
+	e.Path = toSlash(string(matches[fieldFileName]))
 	e.Info = archive.Info{
 		UncompressedSize:     uint32(uncompressedSize),
 		UncompressedChecksum: uncompressedChecksum,
@@ -126,7 +134,7 @@ func (m Manifest) All() iter.Seq[Entry] {
 }
 
 func (m Manifest) GetEntry(path string) (Entry, bool) {
-	f, ok := m.entries[strings.ToLower(filepath.ToSlash(path))]
+	f, ok := m.entries[strings.ToLower(toSlash(path))]
 	return f, ok
 }
 
@@ -136,7 +144,7 @@ func (m *Manifest) AddEntries(entries ...Entry) {
 	}
 
 	for _, entry := range entries {
-		entry.Path = filepath.ToSlash(entry.Path)
+		entry.Path = toSlash(entry.Path)
 		m.entries[strings.ToLower(entry.Path)] = entry
 	}
 }
