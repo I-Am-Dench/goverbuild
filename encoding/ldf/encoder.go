@@ -3,7 +3,6 @@ package ldf
 import (
 	"bytes"
 	"encoding"
-	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -11,13 +10,15 @@ import (
 	"unicode/utf16"
 )
 
-var (
-	string16Type      = reflect.TypeFor[String16]()
-	textMarshalerType = reflect.TypeFor[encoding.TextMarshaler]()
-)
+// A key-value pair which can be directly encoded/decoded.
+type KeyValue struct {
+	Key   string
+	Value any
+}
 
 type TextEncoder struct {
-	w io.Writer
+	w   io.Writer
+	buf []byte
 
 	delim     string
 	wroteLine bool
@@ -28,187 +29,179 @@ func NewTextEncoder(w io.Writer, delim ...string) *TextEncoder {
 	if len(delim) > 0 {
 		d = delim[0]
 	}
-
-	return &TextEncoder{w, d, false}
+	return &TextEncoder{w, []byte{}, d, false}
 }
 
-func isEmpty(v reflect.Value) bool {
-	if v.IsZero() {
-		return true
-	}
-
-	if v.Kind() == reflect.Array || v.Kind() == reflect.Slice {
-		return v.Len() == 0
-	}
-
-	return false
+func (e *TextEncoder) Reset(w io.Writer) {
+	e.w = w
+	e.wroteLine = false
 }
 
-func (e *TextEncoder) encode(buf *bytes.Buffer, key string, valueType ValueType, value string) error {
+func (e *TextEncoder) write(key string, valueType ValueType, value string) error {
+	buf := e.buf[:0]
+
 	if e.wroteLine {
-		buf.WriteString(e.delim)
+		buf = append(buf, e.delim...)
 	}
+	buf = append(buf, key...)
+	buf = append(buf, '=')
+	buf = strconv.AppendInt(buf, int64(valueType), 10)
+	buf = append(buf, ':')
+	buf = append(buf, value...)
+	e.buf = buf
 
-	buf.WriteString(key)
-	buf.WriteRune('=')
-	buf.WriteString(strconv.Itoa(int(valueType)))
-	buf.WriteRune(':')
-	buf.WriteString(value)
-
-	if _, err := e.w.Write(buf.Bytes()); err != nil {
+	if _, err := e.w.Write(buf); err != nil {
 		return err
 	}
 
-	buf.Reset()
 	e.wroteLine = true
-
 	return nil
 }
 
-func (e TextEncoder) getEncoding(value reflect.Value, raw bool) (string, ValueType, error) {
-	if value.Type() == string16Type {
-		return value.Interface().(String16).String(), ValueTypeString, nil
-	}
-
-	if value.Type().Implements(textMarshalerType) {
-		data, err := value.Interface().(encoding.TextMarshaler).MarshalText()
+func (e TextEncoder) encodeAny(v any) (ValueType, string, error) {
+	switch val := v.(type) {
+	case encoding.TextMarshaler:
+		data, err := val.MarshalText()
 		if err != nil {
-			return "", 0, err
+			return 0, "", err
 		}
-
-		t := ValueTypeString
-		if raw {
-			t = ValueTypeUtf8
+		return ValueTypeString, string(data), nil
+	case string:
+		return ValueTypeString, val, nil
+	case String16:
+		return ValueTypeString, val.String(), nil
+	case []uint16:
+		return ValueTypeString, string(utf16.Decode(val)), nil
+	case int32:
+		return ValueTypeI32, strconv.FormatInt(int64(val), 10), nil
+	case float32:
+		return ValueTypeFloat, strconv.FormatFloat(float64(val), 'g', -1, 32), nil
+	case float64:
+		return ValueTypeDouble, strconv.FormatFloat(val, 'g', -1, 64), nil
+	case uint32:
+		return ValueTypeU32, strconv.FormatUint(uint64(val), 10), nil
+	case bool:
+		if val {
+			return ValueTypeBool, "1", nil
+		} else {
+			return ValueTypeBool, "0", nil
 		}
+	case uint:
+		return ValueTypeU64, strconv.FormatUint(uint64(val), 10), nil
+	case uint64:
+		return ValueTypeU64, strconv.FormatUint(val, 10), nil
+	case int:
+		return ValueTypeI64, strconv.FormatInt(int64(val), 10), nil
+	case int64:
+		return ValueTypeI64, strconv.FormatInt(val, 10), nil
+	case []uint8:
+		return ValueTypeUtf8, string(val), nil
+	default:
+		return 0, "", fmt.Errorf("cannot encode %T", v)
+	}
+}
 
-		return string(data), t, nil
+func (e TextEncoder) encodeValue(value reflect.Value) (ValueType, string, error) {
+	if marshaler, ok := value.Interface().(encoding.TextMarshaler); ok {
+		data, err := marshaler.MarshalText()
+		if err != nil {
+			return 0, "", err
+		}
+		return ValueTypeString, string(data), nil
 	}
 
-	switch k := value.Kind(); k {
+	if s, ok := value.Interface().(String16); ok {
+		return ValueTypeString, s.String(), nil
+	}
+
+	switch value.Kind() {
 	case reflect.String:
-		t := ValueTypeString
-		if raw {
-			t = ValueTypeUtf8
-		}
-		return value.String(), t, nil
-	case reflect.Int, reflect.Int32, reflect.Int64:
-		t := ValueTypeI64
-		if k == reflect.Int32 {
-			t = ValueTypeI32
-		}
-		return strconv.FormatInt(value.Int(), 10), t, nil
+		return e.encodeAny(value.String())
+	case reflect.Int32:
+		return e.encodeAny(int32(value.Int()))
 	case reflect.Float32:
-		return strconv.FormatFloat(value.Float(), 'g', -1, 32), ValueTypeFloat, nil
+		return e.encodeAny(float32(value.Float()))
 	case reflect.Float64:
-		return strconv.FormatFloat(value.Float(), 'g', -1, 64), ValueTypeDouble, nil
-	case reflect.Uint, reflect.Uint32, reflect.Uint64:
-		t := ValueTypeU64
-		if k == reflect.Uint32 {
-			t = ValueTypeU32
-		}
-		return strconv.FormatUint(value.Uint(), 10), t, nil
+		return e.encodeAny(value.Float())
+	case reflect.Uint32:
+		return e.encodeAny(uint32(value.Uint()))
 	case reflect.Bool:
-		v := "0"
-		if value.Bool() {
-			v = "1"
-		}
-		return v, ValueTypeBool, nil
-	case reflect.Interface:
-		if value.IsNil() {
-			return "", 0, errors.New("cannot encode nil")
-		}
-		return e.getEncoding(value.Elem(), raw)
+		return e.encodeAny(value.Bool())
+	case reflect.Uint, reflect.Uint64:
+		return e.encodeAny(value.Uint())
+	case reflect.Int, reflect.Int64:
+		return e.encodeAny(value.Int())
 	case reflect.Slice:
-		sliceType := value.Type().Elem()
-
-		if sliceType.Kind() == reflect.Uint16 {
-			s := utf16.Decode(value.Interface().([]uint16))
-			return string(s), ValueTypeString, nil
+		elemKind := value.Type().Elem().Kind()
+		if elemKind == reflect.Uint16 || elemKind == reflect.Uint8 {
+			return e.encodeAny(value.Interface())
 		}
-
-		if sliceType.Kind() == reflect.Uint8 {
-			s := value.Interface().([]uint8)
-			return string(s), ValueTypeUtf8, nil
-		}
-
 		fallthrough
 	default:
-		return "", 0, fmt.Errorf("cannot encode value: %v", value.Type())
+		return 0, "", fmt.Errorf("cannot encode %v", value.Kind())
 	}
 }
 
-func (e *TextEncoder) encodeStruct(value reflect.Value) error {
-	typeInfo := getTypeInfo(value.Type())
+func (e *TextEncoder) encodeKeyValue(kv KeyValue) error {
+	valueType, value, err := e.encodeAny(kv.Value)
+	if err != nil {
+		return err
+	}
+	return e.write(kv.Key, valueType, value)
+}
 
-	buf := bytes.Buffer{}
-	for i, fieldInfo := range typeInfo.fields {
-		if fieldInfo.ignore {
-			continue
-		}
-
-		field := value.Field(i)
-		if fieldInfo.omitEmpty && isEmpty(field) {
-			continue
-		}
-
-		if fieldInfo.embedded {
-			if err := e.encodeStruct(field); err != nil {
-				return err
-			}
-			continue
-		}
-
-		encodedValue, valueType, err := e.getEncoding(field, fieldInfo.raw)
+func (e *TextEncoder) encodeMapAny(m Map) error {
+	for k, v := range m {
+		valueType, value, err := e.encodeAny(v)
 		if err != nil {
-			return fmt.Errorf("ldf: encode: %s: %v", fieldInfo.name, err)
+			return err
 		}
 
-		if err := e.encode(&buf, fieldInfo.name, valueType, encodedValue); err != nil {
-			return fmt.Errorf("ldf: encode: %s: %v", fieldInfo.name, err)
+		if err := e.write(k, valueType, value); err != nil {
+			return err
 		}
 	}
-
 	return nil
 }
 
-func (e *TextEncoder) encodeMap(value reflect.Value) error {
-	iter := value.MapRange()
+func (e *TextEncoder) encode(v any) error {
+	if v == nil {
+		return nil
+	}
 
-	buf := bytes.Buffer{}
-	for iter.Next() {
-		key := iter.Key()
-		if key.Kind() != reflect.String {
-			return fmt.Errorf("ldf: encode: cannot encode %s as key", key.Type())
+	switch val := v.(type) {
+	case KeyValue:
+		return e.encodeKeyValue(val)
+	case []KeyValue:
+		for _, kv := range val {
+			if err := e.encodeKeyValue(kv); err != nil {
+				return err
+			}
 		}
+		return nil
+	case Map:
+		return e.encodeMapAny(val)
+	}
 
-		value := iter.Value()
-		encodedValue, valueType, err := e.getEncoding(value, false)
-		if err != nil {
-			return fmt.Errorf("ldf: encode: %s: %v", key.String(), err)
+	value := reflect.Indirect(reflect.ValueOf(v))
+	switch value.Kind() {
+	case reflect.Struct, reflect.Map:
+		marshal := getArshaler(value.Type()).textMarshal
+		if err := marshal(e, value); err != nil {
+			return err
 		}
-
-		if err := e.encode(&buf, key.String(), valueType, encodedValue); err != nil {
-			return fmt.Errorf("ldf: encode: %s: %v", key.String(), err)
-		}
+	default:
+		return fmt.Errorf("cannot encode %v", value.Type())
 	}
 
 	return nil
 }
 
 func (e *TextEncoder) Encode(v any) error {
-	if v == nil {
-		return nil
+	if err := e.encode(v); err != nil {
+		return fmt.Errorf("ldf: encode: %v", err)
 	}
-
-	value := reflect.Indirect(reflect.ValueOf(v))
-	switch value.Kind() {
-	case reflect.Struct:
-		return e.encodeStruct(value)
-	case reflect.Map:
-		return e.encodeMap(value)
-	default:
-		return fmt.Errorf("ldf: encode: cannot encode %v", value.Kind())
-	}
+	return nil
 }
 
 // MarshalText returns the textual LDF encoding of v.
@@ -229,9 +222,7 @@ func (e *TextEncoder) Encode(v any) error {
 //   - raw (string only): indicates that the field should be
 //     encoded as the [ValueType], [ValueTypeUtf8].
 //
-// Strings are encoded with the value type [ValueTypeString].
-// To encode a string in utf-16, use either the [String16] or
-// []uint16 types.
+// Strings, [String16], and []uint16s are encoded as [ValueTypeString].
 //
 // Fields with type []uint8 (or []byte) are encoded with the
 // value type [ValueTypeUtf8].
@@ -265,6 +256,9 @@ func (e *TextEncoder) Encode(v any) error {
 //
 // Map key types must be a string. Map values follow the same encoding
 // rules as struct fields.
+//
+// Maps embedded in a struct will capture the remaining LDF keys
+// not mapped to a struct field.
 func MarshalText(v any) ([]byte, error) {
 	buf := bytes.Buffer{}
 	if err := NewTextEncoder(&buf).Encode(v); err != nil {

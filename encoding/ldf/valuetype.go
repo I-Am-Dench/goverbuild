@@ -58,3 +58,7 @@ func ToString16(s string) String16 {
 func (s String16) String() string {
 	return string(utf16.Decode(s))
 }
+
+// A valid LDF encodable map which can be
+// embedded into a struct.
+type Map = map[string]any

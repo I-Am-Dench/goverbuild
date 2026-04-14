@@ -3,25 +3,25 @@ package ldf
 import (
 	"bufio"
 	"bytes"
-	"encoding"
+	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"reflect"
 	"regexp"
 	"strconv"
-	"strings"
 	"unicode/utf16"
 )
 
+var delimPattern = regexp.MustCompile("(,|\r\n|\n)")
+
 type Token struct {
-	Name  string
+	Key   string
 	Type  ValueType
 	Value []byte
 }
 
-var delimPattern = regexp.MustCompile("(,|\r\n|\n)")
-
-var textUnmarshalerType = reflect.TypeFor[encoding.TextUnmarshaler]()
+type TokenSeq = iter.Seq2[Token, error]
 
 type TextDecoder struct {
 	delim *regexp.Regexp
@@ -34,9 +34,8 @@ type TextDecoder struct {
 func NewTextDecoder(r io.Reader) *TextDecoder {
 	d := &TextDecoder{
 		delim: delimPattern,
-		s:     bufio.NewScanner(r),
 	}
-	d.s.Split(d.splitDelim)
+	d.Reset(r)
 
 	return d
 }
@@ -73,20 +72,25 @@ func (d TextDecoder) decodeToken(rawToken []byte) (Token, error) {
 		return Token{}, fmt.Errorf("missing value type: %s", rawToken)
 	}
 
-	valueType, err := strconv.Atoi(string(bytes.TrimSpace(rawValueType)))
+	valueType, err := strconv.ParseInt(string(bytes.TrimSpace(rawValueType)), 10, 8)
 	if err != nil {
-		return Token{}, fmt.Errorf("value type is not a number: %s: %s", rawValueType, rawToken)
+		return Token{}, fmt.Errorf("invalid value type: %s: %v", rawToken, err)
 	}
 
-	if valueType < 0 || valueType > int(ValueTypeUtf8) {
-		return Token{}, fmt.Errorf("invalid value type: %d: %s", valueType, rawToken)
+	if valueType < 0 || valueType > int64(ValueTypeUtf8) {
+		return Token{}, fmt.Errorf("invalid value type: %s: %d", rawToken, valueType)
 	}
 
 	return Token{
-		Name:  string(key),
+		Key:   string(bytes.TrimSpace(key)),
 		Type:  ValueType(valueType),
 		Value: value,
 	}, nil
+}
+
+func (d *TextDecoder) Reset(r io.Reader) {
+	d.s = bufio.NewScanner(r)
+	d.s.Split(d.splitDelim)
 }
 
 func (d *TextDecoder) Next() bool {
@@ -121,223 +125,217 @@ func (d TextDecoder) Err() error {
 	return d.err
 }
 
-func (d *TextDecoder) tokens() (map[string]Token, error) {
-	tokens := make(map[string]Token)
+func (d *TextDecoder) All() TokenSeq {
+	return func(yield func(Token, error) bool) {
+		for d.Next() {
+			if !yield(d.Token(), nil) {
+				return
+			}
+		}
 
-	for d.Next() {
-		token := d.Token()
-		tokens[strings.TrimSpace(token.Name)] = token
+		if d.Err() != nil {
+			yield(Token{}, d.Err())
+		}
 	}
-
-	if err := d.Err(); err != nil {
-		return nil, err
-	}
-
-	return tokens, nil
 }
 
-func (d TextDecoder) getUnmarshaler(value reflect.Value) (encoding.TextUnmarshaler, bool) {
-	if value.Kind() != reflect.Pointer {
-		value = value.Addr()
+func (d *TextDecoder) decodeAny(valueType ValueType, data []byte) (any, error) {
+	switch valueType {
+	case ValueTypeString:
+		return string(data), nil
+	case ValueTypeI32:
+		v, err := strconv.ParseInt(string(data), 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		return int32(v), nil
+	case ValueTypeFloat:
+		v, err := strconv.ParseFloat(string(data), 32)
+		if err != nil {
+			return nil, err
+		}
+		return float32(v), nil
+	case ValueTypeDouble:
+		v, err := strconv.ParseFloat(string(data), 64)
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	case ValueTypeU32:
+		v, err := strconv.ParseUint(string(data), 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		return uint32(v), nil
+	case ValueTypeBool:
+		return bytes.Equal(data, []byte("1")), nil
+	case ValueTypeU64:
+		v, err := strconv.ParseUint(string(data), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	case ValueTypeI64:
+		v, err := strconv.ParseInt(string(data), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	case ValueTypeUtf8:
+		return data, nil
+	default:
+		return nil, fmt.Errorf("cannot decode %v", valueType)
 	}
-
-	if value.Type().Implements(textUnmarshalerType) {
-		return value.Interface().(encoding.TextUnmarshaler), true
-	}
-
-	return nil, false
 }
 
-func (d TextDecoder) getValue(token Token, valueType reflect.Type) (reflect.Value, error) {
+func (d *TextDecoder) decodeMapAny(m Map, seq TokenSeq) error {
+	for token := range seq {
+		v, err := d.decodeAny(token.Type, token.Value)
+		if err != nil {
+			return err
+		}
+		m[token.Key] = v
+	}
+	return d.Err()
+}
+
+func (d *TextDecoder) decodeValue(token Token, rtype reflect.Type) (reflect.Value, error) {
 	switch token.Type {
 	case ValueTypeString:
-		if valueType == string16Type || (valueType.Kind() == reflect.Slice && valueType.Elem().Kind() == reflect.Uint16) {
-			runes := []rune(string(token.Value))
-			return reflect.ValueOf(utf16.Encode(runes)), nil
+		if rtype.Kind() == reflect.Slice {
+			if rtype.Elem().Kind() == reflect.Uint16 {
+				s := string(token.Value)
+				return reflect.ValueOf(utf16.Encode([]rune(s))), nil
+			}
+			return reflect.Value{}, fmt.Errorf("cannot decode %v", rtype)
 		}
-
 		return reflect.ValueOf(string(token.Value)), nil
 	case ValueTypeI32:
-		i, err := strconv.ParseInt(string(token.Value), 10, 32)
+		v, err := strconv.ParseInt(string(token.Value), 10, 32)
 		if err != nil {
 			return reflect.Value{}, err
 		}
-
-		return reflect.ValueOf(int32(i)), nil
+		return reflect.ValueOf(int32(v)), nil
 	case ValueTypeFloat:
-		f, err := strconv.ParseFloat(string(token.Value), 32)
+		v, err := strconv.ParseFloat(string(token.Value), 32)
 		if err != nil {
 			return reflect.Value{}, err
 		}
-
-		return reflect.ValueOf(float32(f)), nil
+		return reflect.ValueOf(float32(v)), nil
 	case ValueTypeDouble:
-		f, err := strconv.ParseFloat(string(token.Value), 64)
+		v, err := strconv.ParseFloat(string(token.Value), 64)
 		if err != nil {
 			return reflect.Value{}, err
 		}
-
-		return reflect.ValueOf(f), nil
+		return reflect.ValueOf(v), nil
 	case ValueTypeU32:
-		i, err := strconv.ParseUint(string(token.Value), 10, 32)
+		v, err := strconv.ParseUint(string(token.Value), 10, 32)
 		if err != nil {
 			return reflect.Value{}, err
 		}
-
-		return reflect.ValueOf(uint32(i)), nil
+		return reflect.ValueOf(uint32(v)), nil
 	case ValueTypeBool:
-		return reflect.ValueOf(string(token.Value) == "1"), nil
+		return reflect.ValueOf(bytes.Equal(token.Value, []byte("1"))), nil
 	case ValueTypeU64:
-		i, err := strconv.ParseUint(string(token.Value), 10, 64)
+		v, err := strconv.ParseUint(string(token.Value), 10, 64)
 		if err != nil {
 			return reflect.Value{}, err
 		}
-
-		return reflect.ValueOf(i), nil
+		return reflect.ValueOf(v), nil
 	case ValueTypeI64:
-		i, err := strconv.ParseInt(string(token.Value), 10, 64)
+		v, err := strconv.ParseInt(string(token.Value), 10, 64)
 		if err != nil {
 			return reflect.Value{}, err
 		}
-
-		return reflect.ValueOf(i), nil
+		return reflect.ValueOf(v), nil
 	case ValueTypeUtf8:
-		data := append([]byte(nil), token.Value...)
-		if valueType.Kind() == reflect.String {
-			return reflect.ValueOf(string(data)), nil
-		}
-
-		return reflect.ValueOf(data), nil
+		return reflect.ValueOf(token.Value), nil
 	default:
-		return reflect.Value{}, fmt.Errorf("cannot decode value type: %v", token.Value)
+		return reflect.Value{}, fmt.Errorf("unhandled value type: %v", token.Type)
 	}
 }
 
-func (d TextDecoder) setStructField(value reflect.Value, token Token) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%v", r)
-		}
-	}()
-
-	unmarshaler, ok := d.getUnmarshaler(value)
-	if ok && (token.Type == ValueTypeString || token.Type == ValueTypeUtf8) {
-		return unmarshaler.UnmarshalText(token.Value)
-	}
-
-	valueType := value.Type()
-
-	v, err := d.getValue(token, valueType)
-	if err != nil {
-		return err
-	}
-
-	value.Set(v.Convert(valueType))
-	return nil
+func first(seq TokenSeq) (token Token, err error, ok bool) {
+	seq(func(t Token, e error) bool {
+		token = t
+		err = e
+		ok = true
+		return false
+	})
+	return token, err, ok
 }
 
-func (d TextDecoder) decodeStruct(structValue reflect.Value, tokens map[string]Token) error {
-	typeInfo := getTypeInfo(structValue.Type())
-	for i, field := range typeInfo.fields {
-		if field.ignore {
-			continue
-		}
+func (d *TextDecoder) decode(v any, seq TokenSeq) error {
+	if v == nil {
+		return errors.New("cannot decode nil")
+	}
 
-		value := structValue.Field(i)
-		if field.embedded {
-			if err := d.decodeStruct(value, tokens); err != nil {
+	switch val := v.(type) {
+	case *KeyValue:
+		if token, err, ok := first(seq); ok {
+			if err != nil {
 				return err
 			}
-			continue
-		}
 
-		token, ok := tokens[field.name]
-		if !ok {
-			continue
-		}
+			v, err := d.decodeAny(token.Type, token.Value)
+			if err != nil {
+				return err
+			}
 
-		if !value.IsValid() || !value.CanSet() {
-			continue
+			*val = KeyValue{
+				Key:   token.Key,
+				Value: v,
+			}
 		}
+		return nil
+	case *[]KeyValue:
+		values := []KeyValue{}
+		for token, err := range seq {
+			if err != nil {
+				return err
+			}
 
-		if err := d.setStructField(value, token); err != nil {
-			return fmt.Errorf("ldf: decode: %s: %v", field.name, err)
+			v, err := d.decodeAny(token.Type, token.Value)
+			if err != nil {
+				return err
+			}
+
+			values = append(values, KeyValue{
+				Key:   token.Key,
+				Value: v,
+			})
 		}
+		*val = values
+
+		return nil
+	case Map:
+		return d.decodeMapAny(val, seq)
 	}
 
-	return nil
-}
+	value := reflect.ValueOf(v)
+	if value.Kind() != reflect.Pointer {
+		return fmt.Errorf("cannot decode %v", value.Type())
+	}
 
-func (d TextDecoder) setMapValue(mapValue reflect.Value, token Token) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%v", r)
+	value = reflect.Indirect(value)
+	switch value.Kind() {
+	case reflect.Struct, reflect.Map:
+		unmarshal := getArshaler(value.Type()).textUnmarshal
+		if err := unmarshal(d, value, d.All()); err != nil {
+			return err
 		}
-	}()
-
-	valueType := mapValue.Type().Elem()
-
-	v, err := d.getValue(token, valueType)
-	if err != nil {
-		return err
-	}
-
-	if !v.Type().AssignableTo(valueType) {
-		return fmt.Errorf("cannot assign %v to %v", v.Type(), valueType)
-	}
-
-	mapValue.SetMapIndex(reflect.ValueOf(token.Name), v)
-
-	return nil
-}
-
-func (d *TextDecoder) decodeMap(mapValue reflect.Value) error {
-	if mapValue.Type().Key().Kind() != reflect.String {
-		return fmt.Errorf("ldf: decode: map key type must be a string")
-	}
-
-	tokens, err := d.tokens()
-	if err != nil {
-		return fmt.Errorf("ldf: decode: %v", err)
-	}
-
-	for key, token := range tokens {
-		if err := d.setMapValue(mapValue, token); err != nil {
-			return fmt.Errorf("ldf: decode: %s: %v", key, err)
-		}
+	default:
+		return fmt.Errorf("cannot decode %v", value.Type())
 	}
 
 	return nil
 }
 
 func (d *TextDecoder) Decode(v any) error {
-	if v == nil {
-		return fmt.Errorf("ldf: decode: v cannot be nil")
+	if err := d.decode(v, d.All()); err != nil {
+		return fmt.Errorf("ldf: decode: %v", err)
 	}
-
-	value := reflect.ValueOf(v)
-	switch value.Kind() {
-	case reflect.Pointer:
-		if value.IsNil() {
-			return fmt.Errorf("ldf: decode: v cannot be nil")
-		}
-
-		value = reflect.Indirect(value)
-		if value.Kind() != reflect.Struct {
-			return fmt.Errorf("ldf: decode: cannot decode %v", value.Kind())
-		}
-
-		tokens, err := d.tokens()
-		if err != nil {
-			return fmt.Errorf("ldf: decode: %v", err)
-		}
-
-		return d.decodeStruct(value, tokens)
-	case reflect.Map:
-		return d.decodeMap(value)
-	default:
-		return fmt.Errorf("ldf: decode: cannot decode %v", value.Kind())
-	}
+	return nil
 }
 
 // UnmarshalText parses the textual LDF encoded data into v.
@@ -351,7 +349,8 @@ func (d *TextDecoder) Decode(v any) error {
 // UnmarshalText returns an error if the encoded value type does
 // not match the struct field's type.
 //
-// If the field type is a slice, a new slice is created.
+// If the field type is a slice, a new slice is created, except
+// when the slice implements [encoding.TextUnmarshaler].
 //
 // Fields that implement the [encoding.TextUnmarshaler] interface are
 // only unmarshaled if the value type is either [ValueTypeString] or

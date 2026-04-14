@@ -135,3 +135,9 @@ type Embedded struct {
 func (e Embedded) Format(format string) string {
 	return fmt.Sprintf(format, e.A, e.B)
 }
+
+type EmbeddedMap struct {
+	Name string `ldf:"name"`
+	Age  uint   `ldf:"age"`
+	ldf.Map
+}

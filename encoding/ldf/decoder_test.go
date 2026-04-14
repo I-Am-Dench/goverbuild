@@ -55,7 +55,7 @@ type Integers struct {
 
 func checkInts(expected Integers, format string) func(*testing.T) {
 	return func(t *testing.T) {
-		data := []byte(fmt.Sprintf(format, expected.Int, expected.Uint))
+		data := fmt.Appendf(nil, format, expected.Int, expected.Uint)
 
 		actual := Integers{}
 		if err := ldf.UnmarshalText(data, &actual); err != nil {
@@ -74,7 +74,7 @@ func checkInts(expected Integers, format string) func(*testing.T) {
 
 func checkStdStrings(expected Strings, format string) func(*testing.T) {
 	return func(t *testing.T) {
-		data := []byte(fmt.Sprintf(format, expected.Std8, expected.Std16))
+		data := fmt.Appendf(nil, format, expected.Std8, expected.Std16)
 
 		actual := Strings{}
 		if err := ldf.UnmarshalText(data, &actual); err != nil {
@@ -92,6 +92,10 @@ func checkStdStrings(expected Strings, format string) func(*testing.T) {
 }
 
 func checkMaps(t *testing.T, expected, actual map[string]any) {
+	if len(expected) != len(actual) {
+		t.Errorf("expected %d entries but got %d", len(expected), len(actual))
+	}
+
 	for key, expectedValue := range expected {
 		actualValue, ok := actual[key]
 		if !ok {
@@ -100,7 +104,7 @@ func checkMaps(t *testing.T, expected, actual map[string]any) {
 		}
 
 		if !reflect.ValueOf(expectedValue).Equal(reflect.ValueOf(actualValue)) {
-			t.Errorf("%s: expected %v but got %v", key, expectedValue, actualValue)
+			t.Errorf("%s: expected (%T) %v but got (%T) %v", key, expectedValue, expectedValue, actualValue, actualValue)
 		}
 	}
 }
@@ -244,6 +248,34 @@ func TestDecode(t *testing.T) {
 		if expected.B != actual.B {
 			t.Errorf("expected float32 %f but got %f", expected.B, actual.B)
 		}
+	})
+
+	t.Run("embedded_map", func(t *testing.T) {
+		expected := EmbeddedMap{
+			Name: "Bob",
+			Age:  24,
+			Map: ldf.Map{
+				"title":  "Engineer",
+				"salary": float64(32.0),
+			},
+		}
+
+		data := []byte("name=0:Bob,age=8:24,title=0:Engineer,salary=4:32")
+
+		actual := EmbeddedMap{}
+		if err := ldf.UnmarshalText(data, &actual); err != nil {
+			t.Fatal(err)
+		}
+
+		if expected.Name != actual.Name {
+			t.Errorf("expected string %q but got %q", expected.Name, actual.Name)
+		}
+
+		if expected.Age != actual.Age {
+			t.Errorf("expected int %d but got %d", expected.Age, actual.Age)
+		}
+
+		checkMaps(t, expected.Map, actual.Map)
 	})
 
 	t.Run("delim", func(t *testing.T) {
