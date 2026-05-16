@@ -143,4 +143,35 @@ func TestEncode(t *testing.T) {
 
 		checkMarshalText(t, v, "a=9:%d,b=3:%f")
 	})
+
+	t.Run("embedded_map", func(t *testing.T) {
+		v := EmbeddedMap{
+			Name: "Alice",
+			Age:  32,
+			Map: ldf.Map{
+				"occupation":       "Sales",
+				"years_of_service": uint32(15),
+			},
+		}
+
+		data, err := ldf.MarshalText(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expected := []string{
+			"name=0:Alice",
+			"age=8:32",
+			"occupation=0:Sales",
+			"years_of_service=5:15",
+		}
+		actual := strings.Split(string(data), ",")
+
+		slices.Sort(expected)
+		slices.Sort(actual)
+
+		if !slices.Equal(expected, actual) {
+			t.Errorf("\nexpected = \"%s\"\nactual   = \"%s\"", strings.Join(expected, ","), strings.Join(actual, ","))
+		}
+	})
 }

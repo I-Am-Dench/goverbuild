@@ -9,11 +9,6 @@ import (
 	"sync"
 )
 
-// type (
-// 	textMarshalerFunc   func(enc *TextEncoder, value reflect.Value) error
-// 	textUnmarshalerFunc func(dec *TextDecoder, value reflect.Value) error
-// )
-
 var (
 	textUnmarshalerType = reflect.TypeFor[encoding.TextUnmarshaler]()
 	string16Type        = reflect.TypeFor[String16]()
@@ -319,7 +314,7 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				key := iter.Key().String()
 				value := iter.Value()
 
-				valueType, encodedValue, err := enc.encodeAny(value)
+				valueType, encodedValue, err := enc.encodeAny(value.Interface())
 				if err != nil {
 					return fmt.Errorf("%s: %v", key, err)
 				}
