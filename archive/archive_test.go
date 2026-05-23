@@ -10,10 +10,10 @@ import (
 )
 
 var Expected = archive.Info{
-	UncompressedSize:     2964,
-	UncompressedChecksum: []byte{143, 178, 135, 9, 197, 251, 68, 83, 23, 131, 129, 223, 160, 192, 182, 252},
-	CompressedSize:       1222,
-	CompressedChecksum:   []byte{224, 178, 115, 85, 37, 167, 233, 132, 236, 232, 8, 114, 169, 0, 69, 95},
+	UncompressedSize:     2972,
+	UncompressedChecksum: []byte{177, 30, 252, 122, 35, 42, 9, 24, 50, 111, 230, 37, 84, 80, 34, 154},
+	CompressedSize:       1224,
+	CompressedChecksum:   []byte{13, 121, 199, 209, 64, 177, 213, 237, 161, 197, 59, 231, 74, 119, 38, 68},
 }
 
 func TestCalculateInfo(t *testing.T) {
