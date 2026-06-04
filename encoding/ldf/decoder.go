@@ -21,12 +21,117 @@ type Token struct {
 	Value []byte
 }
 
-type TokenSeq = iter.Seq2[Token, error]
+func (t Token) Interface() (any, error) {
+	switch t.Type {
+	case ValueTypeString:
+		return string(t.Value), nil
+	case ValueTypeI32:
+		v, err := strconv.ParseInt(string(t.Value), 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		return int32(v), nil
+	case ValueTypeFloat:
+		v, err := strconv.ParseFloat(string(t.Value), 32)
+		if err != nil {
+			return nil, err
+		}
+		return float32(v), nil
+	case ValueTypeDouble:
+		v, err := strconv.ParseFloat(string(t.Value), 64)
+		if err != nil {
+			return nil, err
+		}
+		return float64(v), nil
+	case ValueTypeU32:
+		v, err := strconv.ParseUint(string(t.Value), 10, 32)
+		if err != nil {
+			return nil, err
+		}
+		return uint32(v), nil
+	case ValueTypeBool:
+		return bytes.Equal(t.Value, []byte("1")), nil
+	case ValueTypeU64:
+		v, err := strconv.ParseUint(string(t.Value), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	case ValueTypeI64:
+		v, err := strconv.ParseInt(string(t.Value), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return v, nil
+	case ValueTypeUtf8:
+		return t.Value, nil
+	default:
+		return nil, fmt.Errorf("cannot decode %v", t.Type)
+	}
+}
+
+func (t Token) KeyValue() (kv KeyValue, err error) {
+	switch t.Type {
+	case ValueTypeString:
+		kv.Value = string(t.Value)
+	case ValueTypeI32:
+		v, err := strconv.ParseInt(string(t.Value), 10, 32)
+		if err != nil {
+			return kv, err
+		}
+		kv.Value = int32(v)
+	case ValueTypeFloat:
+		v, err := strconv.ParseFloat(string(t.Value), 32)
+		if err != nil {
+			return kv, err
+		}
+		kv.Value = float32(v)
+	case ValueTypeDouble:
+		v, err := strconv.ParseFloat(string(t.Value), 64)
+		if err != nil {
+			return kv, err
+		}
+		kv.Value = float64(v)
+	case ValueTypeU32:
+		v, err := strconv.ParseUint(string(t.Value), 10, 32)
+		if err != nil {
+			return kv, err
+		}
+		kv.Value = uint32(v)
+	case ValueTypeBool:
+		kv.Value = bytes.Equal(t.Value, []byte("1"))
+	case ValueTypeU64:
+		v, err := strconv.ParseUint(string(t.Value), 10, 64)
+		if err != nil {
+			return kv, err
+		}
+		kv.Value = v
+	case ValueTypeI64:
+		v, err := strconv.ParseInt(string(t.Value), 10, 64)
+		if err != nil {
+			return kv, err
+		}
+		kv.Value = v
+	case ValueTypeUtf8:
+		kv.Value = t.Value
+	default:
+		return kv, fmt.Errorf("cannot decode %v", t.Type)
+	}
+
+	kv.Key = t.Key
+	return kv, nil
+}
+
+type TokenSeq = iter.Seq[Token]
 
 type TextDecoder struct {
 	delim *regexp.Regexp
 	s     *bufio.Scanner
 	err   error
+
+	// When Lax is true, the decoder will attempt will attempt
+	// to unmarshal as much as it can, ignoring errors.
+	lax bool
 
 	token Token
 }
@@ -42,6 +147,10 @@ func NewTextDecoder(r io.Reader) *TextDecoder {
 
 func (d *TextDecoder) SetDelim(delim *regexp.Regexp) {
 	d.delim = delim
+}
+
+func (d *TextDecoder) UseLax() {
+	d.lax = true
 }
 
 func (d *TextDecoder) splitDelim(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -102,6 +211,9 @@ func (d *TextDecoder) Next() bool {
 
 		token, err := d.decodeToken(rawToken)
 		if err != nil {
+			if d.lax {
+				continue
+			}
 			d.err = fmt.Errorf("invalid token: %v", err)
 			return false
 		}
@@ -125,72 +237,26 @@ func (d TextDecoder) Err() error {
 	return d.err
 }
 
-func (d *TextDecoder) All() TokenSeq {
-	return func(yield func(Token, error) bool) {
+func (d *TextDecoder) All() (seq TokenSeq, finish func() error) {
+	var seqErr error
+	seq = func(yield func(Token) bool) {
 		for d.Next() {
-			if !yield(d.Token(), nil) {
+			if !yield(d.Token()) {
 				return
 			}
 		}
 
 		if d.Err() != nil {
-			yield(Token{}, d.Err())
+			seqErr = d.Err()
 		}
 	}
-}
 
-func (d *TextDecoder) decodeAny(valueType ValueType, data []byte) (any, error) {
-	switch valueType {
-	case ValueTypeString:
-		return string(data), nil
-	case ValueTypeI32:
-		v, err := strconv.ParseInt(string(data), 10, 32)
-		if err != nil {
-			return nil, err
-		}
-		return int32(v), nil
-	case ValueTypeFloat:
-		v, err := strconv.ParseFloat(string(data), 32)
-		if err != nil {
-			return nil, err
-		}
-		return float32(v), nil
-	case ValueTypeDouble:
-		v, err := strconv.ParseFloat(string(data), 64)
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	case ValueTypeU32:
-		v, err := strconv.ParseUint(string(data), 10, 32)
-		if err != nil {
-			return nil, err
-		}
-		return uint32(v), nil
-	case ValueTypeBool:
-		return bytes.Equal(data, []byte("1")), nil
-	case ValueTypeU64:
-		v, err := strconv.ParseUint(string(data), 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	case ValueTypeI64:
-		v, err := strconv.ParseInt(string(data), 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return v, nil
-	case ValueTypeUtf8:
-		return data, nil
-	default:
-		return nil, fmt.Errorf("cannot decode %v", valueType)
-	}
+	return seq, func() error { return seqErr }
 }
 
 func (d *TextDecoder) decodeMapAny(m Map, seq TokenSeq) error {
 	for token := range seq {
-		v, err := d.decodeAny(token.Type, token.Value)
+		v, err := token.Interface()
 		if err != nil {
 			return err
 		}
@@ -255,14 +321,13 @@ func (d *TextDecoder) decodeValue(token Token, rtype reflect.Type) (reflect.Valu
 	}
 }
 
-func first(seq TokenSeq) (token Token, err error, ok bool) {
-	seq(func(t Token, e error) bool {
+func first(seq TokenSeq) (token Token, ok bool) {
+	seq(func(t Token) bool {
 		token = t
-		err = e
 		ok = true
 		return false
 	})
-	return token, err, ok
+	return token, ok
 }
 
 func (d *TextDecoder) decode(v any, seq TokenSeq) error {
@@ -272,38 +337,22 @@ func (d *TextDecoder) decode(v any, seq TokenSeq) error {
 
 	switch val := v.(type) {
 	case *KeyValue:
-		if token, err, ok := first(seq); ok {
+		if token, ok := first(seq); ok {
+			kv, err := token.KeyValue()
 			if err != nil {
 				return err
 			}
-
-			v, err := d.decodeAny(token.Type, token.Value)
-			if err != nil {
-				return err
-			}
-
-			*val = KeyValue{
-				Key:   token.Key,
-				Value: v,
-			}
+			*val = kv
 		}
 		return nil
 	case *[]KeyValue:
 		values := []KeyValue{}
-		for token, err := range seq {
+		for token := range seq {
+			kv, err := token.KeyValue()
 			if err != nil {
 				return err
 			}
-
-			v, err := d.decodeAny(token.Type, token.Value)
-			if err != nil {
-				return err
-			}
-
-			values = append(values, KeyValue{
-				Key:   token.Key,
-				Value: v,
-			})
+			values = append(values, kv)
 		}
 		*val = values
 
@@ -321,18 +370,24 @@ func (d *TextDecoder) decode(v any, seq TokenSeq) error {
 	switch value.Kind() {
 	case reflect.Struct, reflect.Map:
 		unmarshal := getArshaler(value.Type()).textUnmarshal
-		if err := unmarshal(d, value, d.All()); err != nil {
+
+		seq, finish := d.All()
+		if err := unmarshal(d, value, seq); err != nil {
 			return err
 		}
+		return finish()
 	default:
 		return fmt.Errorf("cannot decode %v", value.Type())
 	}
-
-	return nil
 }
 
 func (d *TextDecoder) Decode(v any) error {
-	if err := d.decode(v, d.All()); err != nil {
+	seq, finish := d.All()
+	if err := d.decode(v, seq); err != nil {
+		return fmt.Errorf("ldf: decode: %v", err)
+	}
+
+	if err := finish(); err != nil {
 		return fmt.Errorf("ldf: decode: %v", err)
 	}
 	return nil

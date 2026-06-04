@@ -79,21 +79,18 @@ func getUnmarshaler(v reflect.Value) (reflect.Value, bool) {
 	return reflect.Value{}, false
 }
 
-func toTokenMap(seq TokenSeq) (tokenMap, error) {
-	m := make(map[string]Token)
-	for token, err := range seq {
-		if err != nil {
-			return nil, err
-		}
+func toTokenMap(seq TokenSeq) tokenMap {
+	m := make(tokenMap)
+	for token := range seq {
 		m[token.Key] = token
 	}
-	return m, nil
+	return m
 }
 
 func toTokenSeq(m tokenMap, exclude []string) TokenSeq {
-	return func(yield func(Token, error) bool) {
+	return func(yield func(Token) bool) {
 		for _, token := range m {
-			if !slices.Contains(exclude, token.Key) && !yield(token, nil) {
+			if !slices.Contains(exclude, token.Key) && !yield(token) {
 				return
 			}
 		}
@@ -239,10 +236,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				}
 			}()
 
-			tokens, err := toTokenMap(seq)
-			if err != nil {
-				return err
-			}
+			tokens := toTokenMap(seq)
 
 			for i, fieldInfo := range fields {
 				if fieldInfo.ignore {
@@ -278,7 +272,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 					return nil
 				}
 
-				decodedValue, err := dec.decodeAny(token.Type, token.Value)
+				decodedValue, err := token.Interface()
 				if err != nil {
 					return err
 				}
@@ -331,17 +325,13 @@ func makeMapArshaler(t reflect.Type) *arshaler {
 				value.Set(reflect.MakeMap(t))
 			}
 
-			for token, err := range seq {
-				if err != nil {
-					return err
-				}
-
-				decodedValue, err := dec.decodeValue(token, elemType)
+			for token := range seq {
+				decodeValue, err := dec.decodeValue(token, elemType)
 				if err != nil {
 					return fmt.Errorf("%s: %v", token.Key, err)
 				}
 
-				value.SetMapIndex(reflect.ValueOf(token.Key), decodedValue)
+				value.SetMapIndex(reflect.ValueOf(token.Key), decodeValue)
 			}
 			return nil
 		},

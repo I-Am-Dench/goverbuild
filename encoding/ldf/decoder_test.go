@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -300,6 +301,37 @@ func TestDecode(t *testing.T) {
 
 		if expected.Std16 != actual.Std16 {
 			t.Errorf("expected %q but got %q", expected.Std16, actual.Std16)
+		}
+	})
+
+	t.Run("lax", func(t *testing.T) {
+		expected := []ldf.KeyValue{
+			{"BAR", uint32(42)},
+			{"FOO", "FEEDBEEF"},
+			{"QUX", int64(-12)},
+		}
+
+		data := []byte("FOO=0:FEEDBEEF,BAR=5:42,BAZ\nQUX=9:-12\nQUUX=")
+
+		decoder := ldf.NewTextDecoder(bytes.NewReader(data))
+		decoder.UseLax()
+
+		actual := []ldf.KeyValue{}
+		if err := decoder.Decode(&actual); err != nil {
+			t.Fatal(err)
+		}
+
+		if len(expected) != len(actual) {
+			t.Errorf("expected %d pairs but got %d", len(expected), len(actual))
+			return
+		}
+
+		slices.SortFunc(actual, func(a, b ldf.KeyValue) int { return strings.Compare(a.Key, b.Key) })
+		for i, a := range expected {
+			b := actual[i]
+			if a.Value != b.Value {
+				t.Errorf("%s: expected %v but got %v", a.Key, a.Value, b.Value)
+			}
 		}
 	})
 }
