@@ -133,6 +133,9 @@ type TextDecoder struct {
 	// to unmarshal as much as it can, ignoring errors.
 	lax bool
 
+	// quick hack for now
+	tokensDecoded map[string]struct{}
+
 	token Token
 }
 
@@ -200,6 +203,8 @@ func (d TextDecoder) decodeToken(rawToken []byte) (Token, error) {
 func (d *TextDecoder) Reset(r io.Reader) {
 	d.s = bufio.NewScanner(r)
 	d.s.Split(d.splitDelim)
+
+	d.tokensDecoded = make(map[string]struct{})
 }
 
 func (d *TextDecoder) Next() bool {

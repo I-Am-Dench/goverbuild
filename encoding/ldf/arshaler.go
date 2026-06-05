@@ -4,7 +4,6 @@ import (
 	"encoding"
 	"fmt"
 	"reflect"
-	"slices"
 	"strings"
 	"sync"
 )
@@ -87,10 +86,10 @@ func toTokenMap(seq TokenSeq) tokenMap {
 	return m
 }
 
-func toTokenSeq(m tokenMap, exclude []string) TokenSeq {
+func toTokenSeq(m tokenMap, exclude map[string]struct{}) TokenSeq {
 	return func(yield func(Token) bool) {
 		for _, token := range m {
-			if !slices.Contains(exclude, token.Key) && !yield(token) {
+			if _, ok := exclude[token.Key]; !ok && !yield(token) {
 				return
 			}
 		}
@@ -152,7 +151,6 @@ func setStructField(field reflect.Value, fieldInfo fieldInfo, decodedValue any) 
 
 func makeStructArshaler(t reflect.Type) *arshaler {
 	fields := []fieldInfo{}
-	fieldNames := []string{}
 
 	n := t.NumField()
 	for i := range n {
@@ -185,9 +183,6 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 			}
 		}
 
-		if !fieldInfo.ignore {
-			fieldNames = append(fieldNames, fieldInfo.name)
-		}
 		fields = append(fields, fieldInfo)
 	}
 
@@ -247,7 +242,7 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 
 				if fieldInfo.embedded {
 					unmarshal := getArshaler(fieldInfo.goType).textUnmarshal
-					if err := unmarshal(dec, field, toTokenSeq(tokens, fieldNames)); err != nil {
+					if err := unmarshal(dec, field, toTokenSeq(tokens, dec.tokensDecoded)); err != nil {
 						return fmt.Errorf("%s: %v", fieldInfo.goType, err)
 					}
 					continue
@@ -280,6 +275,8 @@ func makeStructArshaler(t reflect.Type) *arshaler {
 				if err := setStructField(field, fieldInfo, decodedValue); err != nil {
 					return fmt.Errorf("%s: %v", fieldInfo.name, err)
 				}
+
+				dec.tokensDecoded[token.Key] = struct{}{}
 			}
 			return nil
 		},
