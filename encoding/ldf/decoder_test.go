@@ -305,7 +305,7 @@ func TestDecode(t *testing.T) {
 	})
 
 	t.Run("lax", func(t *testing.T) {
-		expected := []ldf.KeyValue{
+		expected := []ldf.Entry{
 			{"BAR", uint32(42)},
 			{"FOO", "FEEDBEEF"},
 			{"QUX", int64(-12)},
@@ -316,7 +316,7 @@ func TestDecode(t *testing.T) {
 		decoder := ldf.NewTextDecoder(bytes.NewReader(data))
 		decoder.UseLax()
 
-		actual := []ldf.KeyValue{}
+		actual := []ldf.Entry{}
 		if err := decoder.Decode(&actual); err != nil {
 			t.Fatal(err)
 		}
@@ -326,7 +326,7 @@ func TestDecode(t *testing.T) {
 			return
 		}
 
-		slices.SortFunc(actual, func(a, b ldf.KeyValue) int { return strings.Compare(a.Key, b.Key) })
+		slices.SortFunc(actual, func(a, b ldf.Entry) int { return strings.Compare(a.Key, b.Key) })
 		for i, a := range expected {
 			b := actual[i]
 			if a.Value != b.Value {

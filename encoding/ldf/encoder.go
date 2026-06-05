@@ -11,7 +11,7 @@ import (
 )
 
 // A key-value pair which can be directly encoded/decoded.
-type KeyValue struct {
+type Entry struct {
 	Key   string
 	Value any
 }
@@ -142,12 +142,12 @@ func (e TextEncoder) encodeValue(value reflect.Value) (ValueType, string, error)
 	}
 }
 
-func (e *TextEncoder) encodeKeyValue(kv KeyValue) error {
-	valueType, value, err := e.encodeAny(kv.Value)
+func (e *TextEncoder) encodeKeyValue(entry Entry) error {
+	valueType, value, err := e.encodeAny(entry.Value)
 	if err != nil {
 		return err
 	}
-	return e.write(kv.Key, valueType, value)
+	return e.write(entry.Key, valueType, value)
 }
 
 func (e *TextEncoder) encodeMapAny(m Map) error {
@@ -170,9 +170,9 @@ func (e *TextEncoder) encode(v any) error {
 	}
 
 	switch val := v.(type) {
-	case KeyValue:
+	case Entry:
 		return e.encodeKeyValue(val)
-	case []KeyValue:
+	case []Entry:
 		for _, kv := range val {
 			if err := e.encodeKeyValue(kv); err != nil {
 				return err

@@ -70,56 +70,56 @@ func (t Token) Interface() (any, error) {
 	}
 }
 
-func (t Token) KeyValue() (kv KeyValue, err error) {
+func (t Token) Entry() (entry Entry, err error) {
 	switch t.Type {
 	case ValueTypeString:
-		kv.Value = string(t.Value)
+		entry.Value = string(t.Value)
 	case ValueTypeI32:
 		v, err := strconv.ParseInt(string(t.Value), 10, 32)
 		if err != nil {
-			return kv, err
+			return entry, err
 		}
-		kv.Value = int32(v)
+		entry.Value = int32(v)
 	case ValueTypeFloat:
 		v, err := strconv.ParseFloat(string(t.Value), 32)
 		if err != nil {
-			return kv, err
+			return entry, err
 		}
-		kv.Value = float32(v)
+		entry.Value = float32(v)
 	case ValueTypeDouble:
 		v, err := strconv.ParseFloat(string(t.Value), 64)
 		if err != nil {
-			return kv, err
+			return entry, err
 		}
-		kv.Value = float64(v)
+		entry.Value = float64(v)
 	case ValueTypeU32:
 		v, err := strconv.ParseUint(string(t.Value), 10, 32)
 		if err != nil {
-			return kv, err
+			return entry, err
 		}
-		kv.Value = uint32(v)
+		entry.Value = uint32(v)
 	case ValueTypeBool:
-		kv.Value = bytes.Equal(t.Value, []byte("1"))
+		entry.Value = bytes.Equal(t.Value, []byte("1"))
 	case ValueTypeU64:
 		v, err := strconv.ParseUint(string(t.Value), 10, 64)
 		if err != nil {
-			return kv, err
+			return entry, err
 		}
-		kv.Value = v
+		entry.Value = v
 	case ValueTypeI64:
 		v, err := strconv.ParseInt(string(t.Value), 10, 64)
 		if err != nil {
-			return kv, err
+			return entry, err
 		}
-		kv.Value = v
+		entry.Value = v
 	case ValueTypeUtf8:
-		kv.Value = t.Value
+		entry.Value = t.Value
 	default:
-		return kv, fmt.Errorf("cannot decode %v", t.Type)
+		return entry, fmt.Errorf("cannot decode %v", t.Type)
 	}
 
-	kv.Key = t.Key
-	return kv, nil
+	entry.Key = t.Key
+	return entry, nil
 }
 
 type TokenSeq = iter.Seq[Token]
@@ -336,19 +336,19 @@ func (d *TextDecoder) decode(v any, seq TokenSeq) error {
 	}
 
 	switch val := v.(type) {
-	case *KeyValue:
+	case *Entry:
 		if token, ok := first(seq); ok {
-			kv, err := token.KeyValue()
+			kv, err := token.Entry()
 			if err != nil {
 				return err
 			}
 			*val = kv
 		}
 		return nil
-	case *[]KeyValue:
-		values := []KeyValue{}
+	case *[]Entry:
+		values := []Entry{}
 		for token := range seq {
-			kv, err := token.KeyValue()
+			kv, err := token.Entry()
 			if err != nil {
 				return err
 			}
