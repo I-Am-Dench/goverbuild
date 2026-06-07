@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/I-Am-Dench/goverbuild/archive/internal/binarytree"
 )
@@ -88,7 +89,7 @@ func (c Catalog) readPackNames() ([]string, error) {
 			return nil, fmt.Errorf("read pack names: %v", err)
 		}
 
-		names[i] = filepath.ToSlash(string(data))
+		names[i] = string(data)
 	}
 
 	return names, nil
@@ -156,6 +157,8 @@ func (c *Catalog) update(record *CatalogRecord) bool {
 // a call to either [*Catalog.Flush] or [*Catalog.Close] to write the list
 // of pack names and the list of records to the underlying [*os.File].
 //
+// Any occurences of '/' in the provided pack names are replaced with '\'.
+//
 // [CatalogEntry]'s with duplicate path names, but different pack names, DO NOT
 // have a determined order in which the final pack name is chosen.
 func (c *Catalog) Store(entries CatalogEntries) error {
@@ -163,7 +166,7 @@ func (c *Catalog) Store(entries CatalogEntries) error {
 
 	records := []*CatalogRecord{}
 	for packName, entries := range entries {
-		packName = filepath.ToSlash(packName)
+		packName = strings.ReplaceAll(filepath.ToSlash(packName), "/", "\\") // clean path, then replace
 
 		if slices.Index(c.packNames, packName) < 0 {
 			c.packNames = append(c.packNames, packName)

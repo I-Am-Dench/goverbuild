@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/I-Am-Dench/goverbuild/archive"
@@ -53,7 +54,7 @@ func (c *TestCatalog) Generate(packNames []string, entries archive.CatalogEntrie
 	for packName, entries := range entries {
 		for _, entry := range entries {
 			records = append(records, &archive.CatalogRecord{
-				PackName:     filepath.ToSlash(packName),
+				PackName:     strings.ReplaceAll(packName, "/", "\\"),
 				Crc:          archive.GetCrc(entry.Path),
 				IsCompressed: entry.IsCompressed,
 			})
@@ -96,7 +97,7 @@ func createCatalogEntries() archive.CatalogEntries {
 	entries := archive.CatalogEntries{}
 
 	numPacks := rand.Intn(5) + 5
-	for i := 0; i < numPacks; i++ {
+	for i := range numPacks {
 		packEntries := make([]archive.CatalogEntry, rand.Intn(10)+10)
 		for j := range packEntries {
 			compressed := false
@@ -253,14 +254,14 @@ func testCatalogRead(catalogName string, entries archive.CatalogEntries) func(*t
 
 func TestCatalogRead(t *testing.T) {
 	t.Run("read_basic", testCatalogRead("read_basic.pki", archive.CatalogEntries{
-		"packs/pack1.pk": []archive.CatalogEntry{
+		"packs\\pack1.pk": []archive.CatalogEntry{
 			{"files/raw1", false},
 			{"files/raw2", false},
 			{"files/raw3", false},
 			{"files/raw4", false},
 			{"files/raw5", false},
 		},
-		"packs/pack2.pk": []archive.CatalogEntry{
+		"packs\\pack2.pk": []archive.CatalogEntry{
 			{"files/compressed1", true},
 			{"files/compressed2", true},
 			{"files/compressed3", true},
