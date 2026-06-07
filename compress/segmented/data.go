@@ -61,11 +61,18 @@ func (w *DataWriter) flushChunk() (n int, err error) {
 	return n, nil
 }
 
+func (w *DataWriter) writeSignature() error {
+	if _, err := w.baseWriter.Write(dataSignature); err != nil {
+		return fmt.Errorf("signature: %w", err)
+	}
+	w.wroteSignature = true
+	return nil
+}
+
 func (w *DataWriter) Write(p []byte) (n int, err error) {
 	if !w.wroteSignature {
-		w.wroteSignature = true
-		if _, err := w.baseWriter.Write(dataSignature); err != nil {
-			return 0, fmt.Errorf("sd0: writer: signature: %w", err)
+		if err := w.writeSignature(); err != nil {
+			return 0, fmt.Errorf("sd0: writer: %w", err)
 		}
 	}
 
@@ -104,6 +111,14 @@ func (w DataWriter) BytesWritten() int64 {
 }
 
 func (w *DataWriter) Close() error {
+	if !w.wroteSignature {
+		// Fixes a bug where never call Write causes the signature
+		// to never get written.
+		if err := w.writeSignature(); err != nil {
+			return fmt.Errorf("sd0: close: %w", err)
+		}
+	}
+
 	if w.buf.Len() > 0 {
 		if written, err := w.flushChunk(); err != nil {
 			return fmt.Errorf("sd0: close: %w", err)

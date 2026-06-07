@@ -2,7 +2,6 @@ package archive_test
 
 import (
 	"bytes"
-	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -146,26 +145,12 @@ func createData() ([]byte, bool) {
 }
 
 func calculateInfo(data []byte) (info archive.Info, compressedData []byte) {
-	buf := bytes.NewBuffer(data)
-
-	uncompressedSize := buf.Len()
-	uncompressedChecksum := md5.New()
-
-	compressedChecksum := md5.New()
-
 	compressedBuf := bytes.Buffer{}
 
-	w := segmented.NewDataWriter(io.MultiWriter(&compressedBuf, compressedChecksum))
-	buf.WriteTo(io.MultiWriter(w, uncompressedChecksum))
-	w.Close()
+	info, _ = archive.CalculateInfoFromReader(bytes.NewReader(data), &compressedBuf)
+	compressedData = compressedBuf.Bytes()
 
-	return archive.Info{
-		UncompressedSize:     uint32(uncompressedSize),
-		UncompressedChecksum: uncompressedChecksum.Sum(nil),
-
-		CompressedSize:     uint32(w.BytesWritten()),
-		CompressedChecksum: compressedChecksum.Sum(nil),
-	}, compressedBuf.Bytes()
+	return info, compressedData
 }
 
 type Env struct {

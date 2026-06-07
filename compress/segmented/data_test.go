@@ -25,7 +25,7 @@ func createData(dataSize int) []byte {
 	c := 0
 	for len(data) < numBytes {
 		n := rand.Intn(50) + 1
-		for i := 0; i < n; i++ {
+		for range n {
 			data = append(data, byte(chars[c]))
 		}
 		c = (c + 1) % len(chars)
@@ -144,6 +144,10 @@ func TestDataWriter(t *testing.T) {
 			testWrite(t, nil)
 		})
 	}
+
+	t.Run("empty", func(t *testing.T) {
+		testWriteChunkSize(t, []byte{}, segmented.DefaultChunkSize)
+	})
 }
 
 func testReadChunkSize(t *testing.T, expected []byte, chunkSize int) {
